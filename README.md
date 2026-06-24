@@ -187,6 +187,34 @@ config/param-driven, so nothing breaks when a provider renames a model. A local 
 Claude Code client can use the council with zero tunnel; reaching **claude.ai *web*** additionally
 needs the OAuth layer below.
 
+### Streaming decisions to a webhook (real-time governance feed)
+
+Every policy verdict can be POSTed to a URL of your choosing the instant it happens — wire your agents'
+governance feed into Slack, a SIEM, a dashboard, or your own automation. The same append-only verdicts
+that hit the audit log are delivered as slim JSON events.
+
+```yaml
+# switchboard.config.yaml  (off by default)
+settings:
+  webhook:
+    enabled: true
+    url: "https://example.com/hooks/switchboard"
+    events: [deny, approval_required]   # any of: allow | deny | approval_required (empty = all)
+    secret_ref: ${vault:webhook_secret}  # set via `switchboard vault set webhook_secret`
+```
+
+The payload is **decision metadata only** — `{ type, ts, decision, server, tool, scope, reason?,
+duration_ms? }` — *never* the call's arguments or the upstream response, so a webhook can't quietly
+become an exfiltration channel even with `logs.capture_io` on. When `secret_ref` resolves, each
+delivery carries an `x-switchboard-signature: sha256=<hmac>` header (HMAC-SHA256 over the raw body)
+so the receiver can authenticate it; verify with `crypto.createHmac("sha256", secret).update(body)`.
+Delivery is **fire-and-forget and fail-open**: a slow, down, or misconfigured webhook never blocks,
+delays, or alters a governance decision (8s timeout, detached). It fails *closed* on only one thing —
+a promised-but-unresolvable signing secret drops the delivery rather than send an unsigned event a
+receiver would reject. The whole contract (off-by-default, per-decision `events` filtering, valid
+signature, metadata-only even under `capture_io`, drop-on-unresolvable-secret, non-blocking) is
+verified by a deterministic oracle: `npm run verify:webhook` — 25/25.
+
 ### Connecting claude.ai web (OAuth 2.1 + PKCE, Phase 5b)
 
 Claude Desktop, Claude Code, and ChatGPT dev-mode all reach a *local* `/mcp` endpoint with a plain
@@ -289,6 +317,10 @@ works end-to-end through the governed path.
   `/mcp` accepts an API key **or** an OAuth bearer; enabling it forces auth on (fail-closed). Off by
   default. Verified end-to-end (metadata → DCR → PKCE → consent → token → refresh → revoke) by
   `npm run verify:oauth` — 20/20.
+- **Decision webhooks** — `settings.webhook` streams each policy verdict (`allow`/`deny`/
+  `approval_required`) to a URL as it happens, signed with an `x-switchboard-signature` HMAC. Payload
+  is decision metadata only (never call I/O), fire-and-forget + fail-open, off by default. Verified by
+  `npm run verify:webhook` — 25/25.
 
 See **[docs/ROADMAP.md](docs/ROADMAP.md)** for the phase-by-phase detail.
 

@@ -41,7 +41,7 @@ export class Gateway {
     this.vault = new Vault(cfg.vault.backend);
     this.oauth = new OAuthStore(this.vault);
     this.registry = new Registry(this.vault, this.oauth);
-    this.router = new Router(this.registry, cfg);
+    this.router = new Router(this.registry, cfg, (ref) => this.vault.resolve(ref));
   }
 
   /** Mount every enabled server. Failures are isolated so one bad server can't sink the rest. */

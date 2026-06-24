@@ -57,6 +57,7 @@
     "start": "node dist/cli.js",
     "serve": "node dist/cli.js serve",
     "verify:oauth": "node scripts/verify-oauth.mjs",
+    "verify:webhook": "node scripts/verify-webhook.mjs",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

@@ -24,7 +24,8 @@ import type { Registry, MountedServer } from "./registry.js";
 import type { SwitchboardConfig } from "./types.js";
 import { evaluate } from "./policy.js";
 import { approve } from "./approval.js";
-import { audit, sanitizeForAudit } from "./audit.js";
+import { audit, sanitizeForAudit, type AuditEntry } from "./audit.js";
+import { deliverWebhook, type SecretResolver, type WebhookEvent } from "./webhook.js";
 import { log } from "./logger.js";
 
 const SEP = "__";
@@ -47,6 +48,7 @@ export class Router {
   constructor(
     private readonly registry: Registry,
     private readonly cfg: SwitchboardConfig,
+    private readonly resolveSecret: SecretResolver,
   ) {}
 
   private get mode(): "namespaced" | "flat" | "search" {
@@ -215,7 +217,7 @@ export class Router {
     const verdict = evaluate(server.config, toolName, this.cfg, server.scopeHints?.[toolName]);
 
     if (verdict.decision === "deny") {
-      audit({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: verdict.reason });
+      this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: verdict.reason });
       return this.error(`denied by policy: ${verdict.reason}`);
     }
 
@@ -224,9 +226,13 @@ export class Router {
     // can carry timing and (opt-in) request/response.
     let reason = verdict.reason;
     if (verdict.decision === "approval_required") {
+      // Notify the webhook that a call is waiting for a human decision. This is a NOTIFICATION
+      // only — it writes NO audit row, so it can never double-count against usage totals; the
+      // audit log records the eventual allow/deny once the gate is settled below.
+      this.fireWebhook({ decision: "approval_required", server: server.id, tool: toolName, scope: verdict.scope, reason: verdict.reason });
       const allowed = await approve(server.id, toolName, verdict.scope, verdict.reason);
       if (!allowed) {
-        audit({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: "approval denied/unavailable" });
+        this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: "approval denied/unavailable" });
         return this.error(`approval required and not granted for '${exposedName}'`);
       }
       reason = "approved";
@@ -236,7 +242,7 @@ export class Router {
     const start = Date.now();
     try {
       const result = (await server.client.callTool({ name: toolName, arguments: args })) as CallToolResult;
-      audit({
+      this.record({
         server: server.id,
         tool: toolName,
         scope: verdict.scope,
@@ -249,7 +255,7 @@ export class Router {
       return result;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      audit({
+      this.record({
         server: server.id,
         tool: toolName,
         scope: verdict.scope,
@@ -261,6 +267,28 @@ export class Router {
       });
       return this.error(`upstream '${server.id}' failed calling '${toolName}': ${msg}`);
     }
+  }
+
+  /** Write one finalized verdict to the audit log AND notify the webhook. Every terminal
+   *  decision in forward() goes through here so a delivered event always mirrors an audited
+   *  row. The webhook carries decision metadata only — `record` never forwards request/response
+   *  to it, even when `capture_io` stored them on the audit row. */
+  private record(entry: Omit<AuditEntry, "ts">): void {
+    audit(entry);
+    this.fireWebhook({
+      decision: entry.decision,
+      server: entry.server,
+      tool: entry.tool,
+      scope: entry.scope,
+      ...(entry.reason ? { reason: entry.reason } : {}),
+      ...(typeof entry.duration_ms === "number" ? { duration_ms: entry.duration_ms } : {}),
+      ...(entry.error ? { error: entry.error } : {}),
+    });
+  }
+
+  /** Fire-and-forget webhook delivery — never blocks, never throws into the call path. */
+  private fireWebhook(event: WebhookEvent): void {
+    deliverWebhook(this.cfg, event, this.resolveSecret);
   }
 
   /** Best-effort extraction of an upstream error-result's text content for the audit row. */

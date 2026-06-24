@@ -54,8 +54,8 @@ settings:
   webhook:
     enabled: false
     url: ""                       # e.g. https://example.com/hooks/switchboard
-    events: [deny, approval_required]   # any of: allow | deny | approval_required
-    secret_ref: ""                # vault key name, e.g. webhook_secret (set via `switchboard vault set`)
+    events: [deny, approval_required]   # any of: allow | deny | approval_required (empty = all)
+    secret_ref: ""                # ${vault:name} ref, e.g. ${vault:webhook_secret} (set via `switchboard vault set webhook_secret`)
 
   # Audit-capture controls (the Logs page). Duration is always recorded; this only
   # governs whether the request args + upstream response are stored too.
