@@ -77,6 +77,20 @@ export function dashboardHtml(): string {
   .dec.allow { color: var(--ok); } .dec.deny { color: var(--danger); }
   .dec.approval_required { color: var(--warn); }
   .empty { padding: 18px; color: var(--muted); font-size: 13px; }
+  .provider { display: flex; align-items: center; gap: 12px; padding: 13px 18px; border-bottom: 1px solid var(--border); }
+  .provider:last-child { border-bottom: none; }
+  .provider .meta { min-width: 0; }
+  .provider .label { font-weight: 600; }
+  .provider .scopes { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .provider .note { color: var(--warn); font-size: 11px; margin-top: 2px; }
+  .provider .state { margin-left: auto; flex: none; }
+  .badge { font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); }
+  .badge.on { color: var(--ok); border-color: var(--ok); }
+  .badge.expired { color: var(--warn); border-color: var(--warn); }
+  .btn { font-size: 12px; padding: 5px 12px; border-radius: 7px; cursor: pointer;
+    background: var(--accent-dim); border: 1px solid var(--accent); color: var(--fg); }
+  .btn:disabled { background: var(--panel-2); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
+  .btn.ghost { background: none; }
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; }
   footer a { color: var(--accent); text-decoration: none; }
 </style>
@@ -93,6 +107,10 @@ export function dashboardHtml(): string {
       <code id="endpoint">loading…</code>
       <div class="hint">Point any MCP client at this URL. Stdio clients: <code style="display:inline;padding:1px 6px">switchboard serve</code></div>
     </div>
+  </div>
+  <div class="card" style="margin-bottom:24px">
+    <h2>Catalog · connect an account</h2>
+    <div id="catalog"><div class="empty">loading…</div></div>
   </div>
   <div class="grid">
     <div class="card">
@@ -115,6 +133,51 @@ async function api(path, opts) {
   return r.json();
 }
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+async function connect(id, btn) {
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = "opening…";
+  try {
+    const { authorizeUrl } = await api("/api/connect/" + encodeURIComponent(id), { method: "POST" });
+    // The provider page opens in a new tab; it redirects back to /oauth/callback,
+    // which seals the token. The 5s poll then flips this row to "connected".
+    window.open(authorizeUrl, "_blank", "noopener");
+    btn.textContent = "authorize in new tab…";
+  } catch (e) {
+    btn.disabled = false; btn.textContent = original;
+    alert("connect failed: " + e.message);
+  }
+}
+
+async function renderCatalog() {
+  const box = document.getElementById("catalog");
+  const providers = await api("/api/catalog");
+  box.innerHTML = "";
+  if (!providers.length) { box.appendChild(el("div","empty","No providers in the catalog.")); return; }
+  for (const p of providers) {
+    const row = el("div","provider");
+    const meta = el("div","meta");
+    meta.appendChild(el("div","label", esc(p.label)));
+    meta.appendChild(el("div","scopes", esc((p.scopes || []).join(", ") || "—")));
+    if (p.note) meta.appendChild(el("div","note", esc(p.note)));
+    row.appendChild(meta);
+
+    const state = el("div","state");
+    if (p.connected && !p.expired) {
+      state.appendChild(el("span","badge on","connected"));
+    } else if (p.connected && p.expired) {
+      state.appendChild(el("span","badge expired","expired"));
+    } else {
+      const btn = el("button","btn", p.connectable ? "connect" : "needs client id");
+      btn.disabled = !p.connectable;
+      if (p.connectable) btn.onclick = () => connect(p.id, btn);
+      state.appendChild(btn);
+    }
+    row.appendChild(state);
+    box.appendChild(row);
+  }
+}
 
 async function render() {
   const state = await api("/api/state");
@@ -165,8 +228,13 @@ async function render() {
   }
   table.appendChild(tb); ab.appendChild(table);
 }
-render();
-setInterval(render, 5000);
+
+async function tick() {
+  try { await render(); } catch (e) { console.error("render failed", e); }
+  try { await renderCatalog(); } catch (e) { console.error("catalog render failed", e); }
+}
+tick();
+setInterval(tick, 5000);
 </script>
 </body>
 </html>`;

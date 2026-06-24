@@ -102,6 +102,43 @@ servers:
       delete_repo: { enabled: false }     # hard-block the destructive one
 ```
 
+### Connecting an OAuth provider (Phase 3)
+
+For the five managed providers you don't paste a token — you authorize once and Switchboard seals
+the result in the vault. Store the provider's client credentials, then run the loopback flow:
+
+```bash
+# one-time: store the OAuth app's client id/secret (names are a fixed convention)
+printf '%s' '<client-id>'     | node dist/cli.js vault set oauth_github_client_id
+printf '%s' '<client-secret>' | node dist/cli.js vault set oauth_github_client_secret
+
+node dist/cli.js catalog            # see provider status: ready / needs client id / connected
+node dist/cli.js connect github     # prints an authorize URL, waits on a local loopback callback
+```
+
+Or click **Connect** in the dashboard's catalog card. The browser bounces through the provider and
+back to `127.0.0.1`, the token is sealed, and the row flips to **connected** — no token ever leaves
+your machine.
+
+### Wrapping a REST API as MCP (app2mcp, Phase 4)
+
+Point a server at an OpenAPI/Swagger spec and Switchboard generates the MCP tools in-process at mount:
+
+```yaml
+servers:
+  - id: petstore
+    source: app2mcp
+    openapi: https://petstore3.swagger.io/api/v3/openapi.json
+    base_url: https://petstore3.swagger.io/api/v3   # override for relative/host-less specs
+    policy: read                                     # ceiling: GET tools allowed, DELETE denied
+    credentials:
+      Authorization: ${vault:petstore_token}         # resolved per call from the vault
+```
+
+Each operation becomes a governed tool. Scope is inferred from the HTTP verb
+(`GET`→read, `POST/PUT/PATCH`→write, `DELETE`→full), so a generated `deletepet` is **denied** under the
+`read` ceiling above — same policy engine as every other server.
+
 ## CLI
 
 | Command | What it does |
@@ -111,6 +148,8 @@ servers:
 | `switchboard dashboard` | Run only the HTTP endpoint + web console |
 | `switchboard list` | Mount everything and print the governed tool list, then exit |
 | `switchboard doctor` | Check Node, config, transports, and that every secret resolves |
+| `switchboard catalog` | List the OAuth providers and their connection status |
+| `switchboard connect <provider>` | Authorize a provider locally (loopback OAuth → token sealed in the vault) |
 | `switchboard vault set\|list\|rm <name>` | Manage locally-stored secrets |
 
 Global flag: `-c, --config <path>` (default `switchboard.config.yaml`).
@@ -144,13 +183,20 @@ collapses, tokens explode. Switchboard offers three modes via `gateway.tool_expo
 
 ## Project status
 
-**Working alpha.** Real and verified today: the aggregating gateway (stdio + Streamable HTTP), the
-policy engine, all three tool-exposure modes, the encrypted vault, the approval gate, the audit log,
-the dashboard, and the CLI. The full `find_tools → call_tool` round-trip works end-to-end through
-the governed path.
+**Working alpha — all five phases shipped.** Real and verified today: the aggregating gateway
+(stdio + Streamable HTTP), the policy engine, all three tool-exposure modes, the encrypted vault, the
+approval gate, the audit log, the dashboard, and the CLI. The full `find_tools → call_tool` round-trip
+works end-to-end through the governed path.
 
-On the roadmap: managed OAuth flows and **app2mcp** (OpenAPI→MCP generation) — see
-**[docs/ROADMAP.md](docs/ROADMAP.md)**. `app2mcp` servers fail closed until then.
+- **Managed OAuth (Phase 3)** — local OAuth for **5 providers** (Google, GitHub, Slack, Notion, Linear)
+  via the catalog UI or `switchboard connect <provider>`; tokens are sealed in the same local vault as
+  BYO keys. Hand-rolled on Node `crypto` — no third-party auth service, zero native deps.
+- **app2mcp (Phase 4)** — point `source: app2mcp` at an OpenAPI/Swagger spec and Switchboard generates
+  an in-process MCP server at mount, with verb→scope inference flowing into the **same** governance
+  engine (a generated `deletepet` is denied under a `read` ceiling). A reference without a resolvable
+  spec still fails closed.
+
+See **[docs/ROADMAP.md](docs/ROADMAP.md)** for the phase-by-phase detail.
 
 ## Docs
 

@@ -21,6 +21,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { SwitchboardConfig } from "./types.js";
 import { Vault } from "./vault.js";
+import { OAuthStore } from "./oauth.js";
 import { Registry } from "./registry.js";
 import { Router } from "./router.js";
 import { setStdioActive } from "./approval.js";
@@ -31,12 +32,14 @@ const VERSION = "0.1.0";
 
 export class Gateway {
   readonly vault: Vault;
+  readonly oauth: OAuthStore;
   readonly registry: Registry;
   readonly router: Router;
 
   constructor(private readonly cfg: SwitchboardConfig) {
     this.vault = new Vault(cfg.vault.backend);
-    this.registry = new Registry(this.vault);
+    this.oauth = new OAuthStore(this.vault);
+    this.registry = new Registry(this.vault, this.oauth);
     this.router = new Router(this.registry, cfg);
   }
 

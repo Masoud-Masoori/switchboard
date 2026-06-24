@@ -75,6 +75,46 @@ export async function startDashboard(
     res.json(recentAudit(100));
   });
 
+  // --- OAuth catalog (Phase 3): browse providers, connect via local loopback ---
+  const redirectUri = `http://${cfg.gateway.http.host}:${cfg.gateway.http.port}/oauth/callback`;
+
+  app.get("/api/catalog", (_req: Request, res: Response) => {
+    res.json(gateway.oauth.catalog());
+  });
+
+  app.post("/api/connect/:provider", (req: Request, res: Response) => {
+    try {
+      const { authorizeUrl } = gateway.oauth.beginAuth(String(req.params.provider), redirectUri);
+      res.json({ authorizeUrl });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(400).json({ error: msg });
+    }
+  });
+
+  // The provider redirects the browser here after consent. Exchange the code, seal the
+  // token, and show a self-closing confirmation page. Fails closed with a visible message.
+  app.get("/oauth/callback", async (req: Request, res: Response) => {
+    const state = typeof req.query.state === "string" ? req.query.state : "";
+    const code = typeof req.query.code === "string" ? req.query.code : "";
+    const err = typeof req.query.error === "string" ? req.query.error : "";
+    if (err) {
+      res.status(400).type("html").send(callbackPage(`Authorization was denied: ${err}`, false));
+      return;
+    }
+    if (!state || !code) {
+      res.status(400).type("html").send(callbackPage("Missing 'state' or 'code' in the callback.", false));
+      return;
+    }
+    try {
+      const token = await gateway.oauth.completeAuth(state, code);
+      res.type("html").send(callbackPage(`Connected ${token.provider}. You can close this tab.`, true));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(400).type("html").send(callbackPage(msg, false));
+    }
+  });
+
   app.post("/api/servers/:id/toggle", async (req: Request, res: Response) => {
     const id = req.params.id;
     const server = cfg.servers.find((s) => s.id === id);
@@ -108,4 +148,22 @@ export async function startDashboard(
       });
     });
   });
+}
+
+/** Minimal self-contained HTML for the OAuth redirect landing page. No external requests. */
+function callbackPage(message: string, ok: boolean): string {
+  const safe = message.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c] ?? c);
+  const color = ok ? "#3fb950" : "#f85149";
+  const title = ok ? "Connected" : "Authorization failed";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
+<title>Switchboard · ${title}</title>
+<style>
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    background:#0d1117; color:#e6edf3; font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .box { max-width:440px; padding:32px 36px; border:1px solid #2a3340; border-radius:14px; background:#161b22; text-align:center; }
+  .dot { width:14px; height:14px; border-radius:50%; background:${color}; display:inline-block; margin-bottom:14px; }
+  h1 { margin:0 0 8px; font-size:18px; }
+  p { margin:0; color:#8b98a5; }
+</style></head>
+<body><div class="box"><span class="dot"></span><h1>${title}</h1><p>${safe}</p></div></body></html>`;
 }

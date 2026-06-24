@@ -25,19 +25,27 @@ Name, vision, architecture, competitive read, config schema. Done — see
 - [x] Append-only audit log + dashboard viewer.
 - The MAS-AI-native moat: local credentials **+** a real governance layer.
 
-## Phase 3 — Auth & catalog 🔜 *(next)*
-- [ ] OAuth-per-provider, done locally (start with 5: Google, GitHub, Slack, Notion, Linear).
-      Evaluate embedding **Nango** (source-available unified auth) vs hand-rolling.
-- [ ] Curated catalog UI: browse → one-click connect → login → enabled.
-- *Today:* BYO keys via the vault, plus `remote` servers you've pre-authed. Managed OAuth is the gap.
-- **Cut:** hosted/team sync.
+## Phase 3 — Auth & catalog ✅ *(shipped)*
+- [x] OAuth-per-provider, done locally — **5 providers wired**: Google, GitHub, Slack, Notion, Linear
+      (`src/oauth.ts`: PKCE where supported, per-provider authorize/token URLs, scope separators,
+      loopback redirect). Hand-rolled on Node's built-in `crypto` — **no Nango, zero native deps**;
+      tokens are sealed in the same AES-256-GCM vault as BYO keys.
+- [x] Curated catalog UI: browse providers → one-click **Connect** → provider login → token sealed →
+      row flips to **connected** (`src/console.ts` catalog card + `/api/catalog` · `/api/connect/:provider`
+      · `/oauth/callback` in `src/dashboard.ts`). CLI parity: `switchboard catalog` + `switchboard connect <provider>`.
+- *BYO keys via the vault still work unchanged; managed OAuth is now the headline path for the 5 providers.*
+- **Cut (still deferred):** hosted/team sync.
 
-## Phase 4 — app2mcp 🗓 *(later)*
-- [ ] OpenAPI/Swagger import → generated MCP server (lean on FastMCP/openapi-mcp-style generators).
-- [ ] Verb→scope inference; per-operation enable.
-- [ ] Postman / cURL import.
-- **Honest scope:** spec-in → MCP-out. Explicitly NOT "any app with no API." The `app2mcp` source
-  **fails closed today** (throws on mount) so nothing is silently half-exposed before this lands.
+## Phase 4 — app2mcp ✅ *(shipped)*
+- [x] OpenAPI/Swagger import → in-process MCP server, generated at mount (`src/openapi.ts`,
+      linked via the SDK's `InMemoryTransport` — no extra process, no FastMCP dependency).
+      Supports OpenAPI 3.x **and** Swagger 2.0; `base_url` override for relative/host-less specs.
+- [x] Verb→scope inference (`GET/HEAD/OPTIONS/TRACE`→read, `POST/PUT/PATCH`→write, `DELETE`→full)
+      threaded into the **same governance engine** — proven live: a generated `deletepet` is denied
+      under a `read` ceiling. Per-operation enable via the standard per-tool toggle.
+- [ ] Postman / cURL import — *still deferred* (OpenAPI covers the 80%).
+- **Honest scope:** spec-in → MCP-out. Still explicitly NOT "any app with no API." A config that
+  references `app2mcp` **without** a resolvable spec still fails closed.
 
 ## Phase 5 — Scale & optional hosted 🗓 *(later)*
 - [x] `search` tool-exposure mode (`find_tools` / `call_tool`) for large catalogs — **already shipped**

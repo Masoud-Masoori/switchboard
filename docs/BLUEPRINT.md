@@ -41,8 +41,8 @@ so `npm install` never needs a C/C++ toolchain. No database, no React build step
                       │            └───────┬──────────────────┬───────────────────┬───────────────┘ │
                       └────────────────────┼──────────────────┼───────────────────┼─────────────────┘
                                            ▼                  ▼                   ▼
-                                   stdio (npx/binary)    remote (HTTP)      app2mcp (roadmap,
-                                   e.g. server-github    e.g. hosted MCP    fails closed today)
+                                   stdio (npx/binary)    remote (HTTP)      app2mcp (OpenAPI spec
+                                   e.g. server-github    e.g. hosted MCP    → in-process MCP)
 
    DASHBOARD (src/dashboard.ts + src/console.ts) ──HTTP──▶ /api/state · /api/audit · toggle servers
 ```
@@ -51,14 +51,16 @@ so `npm install` never needs a C/C++ toolchain. No database, no React build step
 
 ## 2. Module map
 
-Every file under `src/` and what it owns. Fourteen modules, no dead code.
+Every file under `src/` and what it owns. Sixteen modules, no dead code.
 
 | Module | Responsibility | Key exports |
 |---|---|---|
 | `types.ts` | The typed shape of `switchboard.config.yaml`, mirrored 1:1. The contract everything else consumes. | `Scope`, `ServerConfig`, `GatewayConfig`, `VaultConfig`, `SwitchboardConfig`, `ToolOverride`, `ApprovalConfig` |
 | `config.ts` | Load YAML → validate with a zod schema → typed config. Also writes configs and emits the starter. | `loadConfig`, `writeConfig`, `starterConfig` |
 | `vault.ts` | Local encrypted credential store + `${vault:..}` / `${env:..}` reference resolution. | `Vault`, `HOME_DIR` |
+| `oauth.ts` | Local OAuth-per-provider (Google/GitHub/Slack/Notion/Linear): PKCE, loopback flow, token sealed into the vault, catalog status. | `OAuthStore`, `ProviderStatus` |
 | `registry.ts` | Mounts upstream MCP servers (one `Client` each), holds the live connections, mounts/unmounts on demand. | `Registry`, `MountedServer` |
+| `openapi.ts` | app2mcp: OpenAPI 3.x / Swagger 2.0 spec → an in-process MCP `Server`, verb→scope per operation, auth from the vault at call time. | `buildOpenApiServer`, `OpenApiServer` |
 | `policy.ts` | Scope inference from tool names + the read/write/full governance decision. | `evaluate`, `inferScope`, `PolicyDecision` |
 | `approval.ts` | The fail-closed human approval gate for scope-gated calls. | `approve`, `setStdioActive` |
 | `audit.ts` | Append-only JSON-lines audit log of every governance verdict. | `audit`, `recentAudit`, `AuditEntry` |
@@ -66,7 +68,7 @@ Every file under `src/` and what it owns. Fourteen modules, no dead code.
 | `gateway.ts` | Wires the MCP `Server` to the router; serves stdio + builds per-request servers for HTTP. | `Gateway`, `createGateway` |
 | `dashboard.ts` | The express app: `/mcp` Streamable HTTP endpoint, the web console, and the control-plane API. | `startDashboard`, `DashboardHandle` |
 | `console.ts` | The embedded dashboard — one self-contained dark-theme HTML document, vanilla JS, no build step. | `dashboardHtml` |
-| `cli.ts` | The `switchboard` command (init / serve / dashboard / list / doctor / vault). | *(bin entry)* |
+| `cli.ts` | The `switchboard` command (init / serve / dashboard / list / doctor / vault / catalog / connect). | *(bin entry)* |
 | `logger.ts` | stderr-only logging so stdout stays clean for the stdio MCP channel. | `log`, `out` |
 | `index.ts` | Public library surface — the gateway is embeddable inside another Node process. | re-exports all of the above |
 
@@ -128,7 +130,7 @@ history). `vault list` returns names only — values are never printed, logged, 
 ## 5. The server registry (`registry.ts`)
 
 The registry owns the live upstream connections. One `@modelcontextprotocol/sdk` `Client` per
-enabled server. Three working source types plus one roadmap stub:
+enabled server. Four working source types:
 
 - **`npx`** → `StdioClientTransport` launching `npx -y <package> <args>`. (On Windows the command
   is `npx.cmd`.) The child's environment inherits `process.env`, then layers the server's resolved
@@ -136,8 +138,10 @@ enabled server. Three working source types plus one roadmap stub:
   agent could read back.
 - **`binary`** → same stdio path, launching an arbitrary `command` instead of npx.
 - **`remote`** → `StreamableHTTPClientTransport(new URL(url))` to a hosted MCP server.
-- **`app2mcp`** → **throws** "on the roadmap (Phase 4)". It fails closed by design; configs ship it
-  `enabled: false`.
+- **`app2mcp`** → builds an in-process MCP `Server` from an OpenAPI/Swagger spec (`openapi.ts`),
+  linked over the SDK's `InMemoryTransport.createLinkedPair()` — no child process. Each operation
+  becomes a tool; the HTTP verb sets the scope. A reference **without** a resolvable spec still
+  fails closed (the build throws and the server does not mount).
 
 `mountAll()` connects every enabled server at startup; the dashboard can `mount()` / `unmount()` a
 single server live when you flip its toggle, without restarting the gateway.
@@ -261,9 +265,15 @@ default):
 - **`GET /api/audit`** — recent audit entries, newest-first.
 - **`POST /api/servers/:id/toggle`** — flip a server ON/OFF: mounts or unmounts it live **and**
   persists the change back to `switchboard.config.yaml`.
+- **`GET /api/catalog`** — the OAuth providers and their connection status (Phase 3).
+- **`POST /api/connect/:provider`** — begin a provider's OAuth flow; returns the authorize URL.
+- **`GET /oauth/callback`** — the loopback landing the provider redirects to; exchanges the code,
+  seals the token in the vault, and renders a self-contained confirmation page (fails closed with a
+  visible message).
 
 `console.ts` is a single self-contained HTML document — dark theme (`--bg #0d1117`, teal accent
-`#2dd4bf`), scope pills for read/write/full — that polls `/api/state` and `/api/audit` every 5s.
+`#2dd4bf`), scope pills for read/write/full, plus the provider catalog card — that polls
+`/api/state`, `/api/audit`, and `/api/catalog` every 5s.
 No React, no Vite, no bundler: the "operator console" is one file the gateway serves verbatim.
 
 ---
@@ -279,6 +289,8 @@ No React, no Vite, no bundler: the "operator console" is one file the gateway se
 | `dashboard` | Start only the HTTP endpoint + console; print the URL. |
 | `list` | Mount everything, print `${n} tools exposed` with each tool's inferred scope, then shut down. |
 | `doctor` | Print Node version, home, config path, vault backend, transports, the `/mcp` endpoint, and every server — resolving each secret (without printing it) and flagging policy traps. Exit non-zero on any problem. |
+| `catalog` | List the OAuth providers and their status: ready / needs client id / connected / expired. |
+| `connect <provider>` | Run the loopback OAuth flow for one provider — print the authorize URL, listen on the configured host/port for the `/oauth/callback`, exchange the code, and seal the token in the vault. |
 | `vault set\|list\|rm` | Manage secrets; `set` reads the value from stdin/TTY, `list` shows names only. |
 
 Logs go to **stderr** (`logger.ts`) so **stdout** stays a clean MCP channel for the stdio transport.
@@ -312,12 +324,18 @@ A blocked `delete_repo` never leaves step 3: it's denied, audited, and the agent
 - The **full governed round-trip**: `find_tools` → `call_tool` through `evaluate()` → upstream →
   result, with the verdict audited.
 - The vault (encrypt/resolve/fail-closed), the approval gate, the audit log, and the dashboard.
+- **app2mcp** (Phase 4): `source: app2mcp` against the live Petstore spec generates the operations
+  as tools; verb→scope flows into the same engine — a generated `deletepet` is denied under a
+  `read` ceiling, proven live.
+- Managed **OAuth-per-provider** (Phase 3): the catalog (UI + `switchboard catalog`) reports
+  provider status and `switchboard connect <provider>` runs the loopback flow; built on Node
+  `crypto`, tokens sealed into the same vault as BYO keys. *(The live handshake needs a real
+  provider's client credentials — the flow compiles and wires end-to-end; exercising it is BYO-app.)*
 
 **On the roadmap** ([ROADMAP.md](ROADMAP.md)):
 
-- Managed **OAuth-per-provider** (today: BYO keys via the vault, and `remote` servers you've
-  pre-authed).
-- **app2mcp** (OpenAPI→MCP generation) — the `app2mcp` source fails closed until the generator ships.
+- Postman / cURL import for app2mcp (OpenAPI covers the 80% today).
+- An optional open-core hosted tier (team policy, SSO, managed OAuth) — the local core stays headline.
 
 ---
 
@@ -325,7 +343,7 @@ A blocked `delete_repo` never leaves step 3: it's denied, audited, and the agent
 
 ```
 switchboard/
-├── src/                         # 14 modules (table in §2)
+├── src/                         # 16 modules (table in §2)
 ├── dist/                        # tsc output (gitignored)
 ├── docs/
 │   ├── BLUEPRINT.md             # this file

@@ -7,6 +7,8 @@ export { Gateway, createGateway } from "./gateway.js";
 export { Registry, type MountedServer } from "./registry.js";
 export { Router } from "./router.js";
 export { Vault, HOME_DIR } from "./vault.js";
+export { OAuthStore, type ProviderStatus } from "./oauth.js";
+export { buildOpenApiServer, type OpenApiServer } from "./openapi.js";
 export { loadConfig, writeConfig, starterConfig } from "./config.js";
 export { evaluate, inferScope, type PolicyDecision } from "./policy.js";
 export { approve, setStdioActive } from "./approval.js";

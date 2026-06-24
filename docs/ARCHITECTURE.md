@@ -26,7 +26,7 @@
                                                             │
                     ┌──────────────┬─────────────┬──────────┴───────┐
               stdio/npx          remote HTTP    app2mcp-generated   ...
-              (github MCP)       (slack MCP)    (roadmap; fails closed)
+              (github MCP)       (slack MCP)    (OpenAPI spec → MCP)
 
    DASHBOARD (local web UI) ──HTTP──▶ Gateway control plane
    (toggle ON/OFF, set scopes, view audit log, copy the MCP URL)
@@ -41,7 +41,9 @@ surface and forwards calls to mounted upstream servers after policy checks.
 The set of mounted upstream MCP servers, one SDK `Client` each. Source types:
 - `npx` / `binary` — launch a local MCP server process (stdio).
 - `remote` — connect to a hosted MCP server over Streamable HTTP.
-- `app2mcp` — a server we **generate** from an OpenAPI spec. **Roadmap (Phase 4); fails closed today.**
+- `app2mcp` — a server we **generate** in-process from an OpenAPI/Swagger spec (`src/openapi.ts`),
+  linked via the SDK's `InMemoryTransport` — no extra process. **Shipped (Phase 4).** A reference
+  without a resolvable spec still fails closed.
 
 ### 3. Credential Vault (`src/vault.ts`)
 Local, encrypted-at-rest store for API keys and tokens. Backend = a passphrase-free
@@ -72,11 +74,15 @@ Local web UI (the "operator console"). Lists servers, **ON/OFF** toggles (mount/
 to config), sets scopes, shows the audit log, and surfaces the **MCP URL to copy** into agent clients.
 It is a single self-contained vanilla-JS HTML document served by the gateway — no React, no bundler.
 
-### 7. app2mcp Generator *(roadmap — Phase 4)*
-`spec → MCP server`. OpenAPI/Swagger is the primary path. Each operation becomes a tool; scopes
-inferred from HTTP verb (GET→read, POST/PUT/PATCH→write, DELETE→full). **Honest limit:** needs a spec
-or a describable API — no spec, no magic. **Not built yet:** the `app2mcp` source throws by design, so
-a config that references it fails closed rather than silently exposing nothing.
+### 7. app2mcp Generator (`src/openapi.ts`) — *shipped (Phase 4)*
+`spec → MCP server`, generated **in-process** at mount and linked to the gateway via the SDK's
+`InMemoryTransport` (no child process, no FastMCP dependency). OpenAPI 3.x **and** Swagger 2.0 are
+parsed; each operation becomes a tool with a JSON-Schema input derived from its parameters + request
+body, and a `base_url` override covers relative/host-less specs. Scopes are inferred from the HTTP
+verb (`GET/HEAD/OPTIONS/TRACE`→read, `POST/PUT/PATCH`→write, `DELETE`→full) and flow into the **same**
+policy engine as every other server — a generated `deletepet` is denied under a `read` ceiling, proven
+live. Auth headers resolve from the vault at call time. **Honest limit:** needs a spec or a describable
+API — no spec, no magic; a reference without a resolvable spec still fails closed.
 
 ## As-built stack
 

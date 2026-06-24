@@ -33,14 +33,22 @@ export interface PolicyDecision {
   reason: string;
 }
 
-export function evaluate(server: ServerConfig, toolName: string, cfg: SwitchboardConfig): PolicyDecision {
+export function evaluate(
+  server: ServerConfig,
+  toolName: string,
+  cfg: SwitchboardConfig,
+  scopeHint?: Scope,
+): PolicyDecision {
   const override = server.tools?.[toolName];
 
   if (override?.enabled === false) {
     return { decision: "deny", scope: "read", reason: `tool '${toolName}' is disabled in config` };
   }
 
-  const scope: Scope = override?.policy ?? inferScope(toolName);
+  // Precedence: explicit per-tool override > generator-supplied verb→scope hint (app2mcp) >
+  // name-based inference. The hint lets OpenAPI HTTP verbs drive scope when the tool name alone
+  // (e.g. `findPetsByStatus`) would otherwise be misread.
+  const scope: Scope = override?.policy ?? scopeHint ?? inferScope(toolName);
   const ceiling: Scope = server.policy ?? cfg.gateway.default_policy;
 
   if (SCOPE_RANK[scope] > SCOPE_RANK[ceiling]) {

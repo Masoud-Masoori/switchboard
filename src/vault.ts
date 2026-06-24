@@ -26,12 +26,33 @@ const VAULT_PATH = join(HOME_DIR, "vault.json");
 
 const REF_RE = /\$\{(vault|env):([^}]+)\}/g;
 
-interface SealedSecret {
+/** An AES-256-GCM sealed value: base64-encoded IV + auth tag + ciphertext. */
+export interface SealedSecret {
   iv: string;
   tag: string;
   data: string;
 }
 type VaultFile = Record<string, SealedSecret>;
+
+/** Seal a plaintext string under a 32-byte key (AES-256-GCM, a fresh IV per call). */
+export function seal(key: Buffer, plaintext: string): SealedSecret {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", key, iv);
+  const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  return {
+    iv: iv.toString("base64"),
+    tag: cipher.getAuthTag().toString("base64"),
+    data: enc.toString("base64"),
+  };
+}
+
+/** Reverse `seal`. Throws if the key is wrong or the ciphertext was tampered with. */
+export function unseal(key: Buffer, sealed: SealedSecret): string {
+  const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(sealed.iv, "base64"));
+  decipher.setAuthTag(Buffer.from(sealed.tag, "base64"));
+  const dec = Buffer.concat([decipher.update(Buffer.from(sealed.data, "base64")), decipher.final()]);
+  return dec.toString("utf8");
+}
 
 function ensureHome(): void {
   if (!existsSync(HOME_DIR)) mkdirSync(HOME_DIR, { recursive: true });
@@ -46,7 +67,11 @@ function restrict(path: string): void {
   }
 }
 
-function loadOrCreateKey(): Buffer {
+/**
+ * Load the vault key, creating it on first use. Exported because the OAuth token
+ * store (`src/oauth.ts`) seals its tokens with the same key + `seal`/`unseal`.
+ */
+export function loadVaultKey(): Buffer {
   ensureHome();
   if (existsSync(KEY_PATH)) return readFileSync(KEY_PATH);
   const key = randomBytes(32);
@@ -75,7 +100,7 @@ export class Vault {
   private store: VaultFile;
 
   constructor(private readonly backend: "encrypted-file" | "env" = "encrypted-file") {
-    this.key = backend === "encrypted-file" ? loadOrCreateKey() : Buffer.alloc(0);
+    this.key = backend === "encrypted-file" ? loadVaultKey() : Buffer.alloc(0);
     this.store = backend === "encrypted-file" ? readStore() : {};
   }
 
@@ -84,14 +109,7 @@ export class Vault {
     if (this.backend !== "encrypted-file") {
       throw new Error(`vault backend '${this.backend}' is read-only; secrets come from the environment`);
     }
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", this.key, iv);
-    const enc = Buffer.concat([cipher.update(secret, "utf8"), cipher.final()]);
-    this.store[name] = {
-      iv: iv.toString("base64"),
-      tag: cipher.getAuthTag().toString("base64"),
-      data: enc.toString("base64"),
-    };
+    this.store[name] = seal(this.key, secret);
     writeStore(this.store);
   }
 
@@ -99,10 +117,7 @@ export class Vault {
   get(name: string): string | undefined {
     const sealed = this.store[name];
     if (!sealed) return undefined;
-    const decipher = createDecipheriv("aes-256-gcm", this.key, Buffer.from(sealed.iv, "base64"));
-    decipher.setAuthTag(Buffer.from(sealed.tag, "base64"));
-    const dec = Buffer.concat([decipher.update(Buffer.from(sealed.data, "base64")), decipher.final()]);
-    return dec.toString("utf8");
+    return unseal(this.key, sealed);
   }
 
   remove(name: string): void {

@@ -212,7 +212,7 @@ export class Router {
     if (!target) return this.error(`unknown tool '${exposedName}'`);
 
     const { server, toolName } = target;
-    const verdict = evaluate(server.config, toolName, this.cfg);
+    const verdict = evaluate(server.config, toolName, this.cfg, server.scopeHints?.[toolName]);
 
     if (verdict.decision === "deny") {
       audit({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: verdict.reason });

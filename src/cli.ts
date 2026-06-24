@@ -7,6 +7,8 @@
  *   switchboard dashboard            run only the HTTP endpoint + web console
  *   switchboard list                 mount everything and print the governed tool list
  *   switchboard doctor               check the environment + config
+ *   switchboard catalog              list OAuth providers + connection status
+ *   switchboard connect <provider>   authorize a provider via local loopback OAuth
  *   switchboard vault set <name>     store a secret (value read from stdin)
  *   switchboard vault list|rm <name> manage secrets
  *
@@ -14,6 +16,7 @@
  */
 
 import { existsSync } from "node:fs";
+import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { Command } from "commander";
@@ -22,6 +25,7 @@ import { createGateway } from "./gateway.js";
 import { startDashboard } from "./dashboard.js";
 import { dashboardHtml } from "./console.js";
 import { Vault, HOME_DIR } from "./vault.js";
+import { OAuthStore } from "./oauth.js";
 import { inferScope, evaluate } from "./policy.js";
 import { log, out } from "./logger.js";
 
@@ -148,6 +152,80 @@ program
     if (ok) log.ok("config looks healthy");
     else log.error("issues found (see above)");
     process.exitCode = ok ? 0 : 1;
+  });
+
+program
+  .command("catalog")
+  .description("list OAuth providers and their connection status")
+  .action(() => {
+    const cfg = loadConfig(configPath());
+    const oauth = new OAuthStore(new Vault(cfg.vault.backend));
+    out(`\nOAuth providers:\n`);
+    for (const p of oauth.catalog()) {
+      const status = p.connected ? (p.expired ? "expired" : "connected") : p.connectable ? "ready" : "needs client id";
+      out(`  ${p.label.padEnd(12)} [${status}]  ${(p.scopes ?? []).join(", ")}`);
+      if (p.note) out(`               ${p.note}`);
+    }
+    out(`\nStore client credentials first: \`switchboard vault set oauth_<provider>_client_id\` (and _client_secret).`);
+    out(`Then connect: \`switchboard connect <provider>\`.`);
+  });
+
+program
+  .command("connect <provider>")
+  .description("authorize an OAuth provider via the local loopback flow")
+  .action(async (provider: string) => {
+    const cfg = loadConfig(configPath());
+    const oauth = new OAuthStore(new Vault(cfg.vault.backend));
+    const { host, port } = cfg.gateway.http;
+    const redirectUri = `http://${host}:${port}/oauth/callback`;
+
+    let authorizeUrl: string;
+    try {
+      ({ authorizeUrl } = oauth.beginAuth(provider, redirectUri));
+    } catch (err) {
+      log.error(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+      return;
+    }
+
+    // Spin up a one-shot loopback listener to catch the provider's redirect, complete the
+    // exchange, then shut down. Tokens are sealed by OAuthStore — nothing is printed.
+    await new Promise<void>((done) => {
+      const server = createServer(async (req, res) => {
+        const url = new URL(req.url ?? "/", `http://${host}:${port}`);
+        if (url.pathname !== "/oauth/callback") {
+          res.writeHead(404).end("not found");
+          return;
+        }
+        const state = url.searchParams.get("state") ?? "";
+        const code = url.searchParams.get("code") ?? "";
+        const error = url.searchParams.get("error") ?? "";
+        try {
+          if (error) throw new Error(`provider returned: ${error}`);
+          if (!state || !code) throw new Error("missing 'state' or 'code' in callback");
+          const token = await oauth.completeAuth(state, code);
+          res.writeHead(200, { "content-type": "text/html" }).end("<h1>Connected — you can close this tab.</h1>");
+          log.ok(`connected '${token.provider}'`);
+        } catch (err) {
+          res.writeHead(400, { "content-type": "text/html" }).end("<h1>Authorization failed.</h1>");
+          log.error(err instanceof Error ? err.message : String(err));
+          process.exitCode = 1;
+        } finally {
+          server.close(() => done());
+        }
+      });
+      server.on("error", (err) => {
+        const msg = (err as NodeJS.ErrnoException).code === "EADDRINUSE"
+          ? `port ${port} is busy — stop \`switchboard serve\` and retry, or use the dashboard's Connect button`
+          : err.message;
+        log.error(msg);
+        process.exitCode = 1;
+        done();
+      });
+      server.listen(port, host, () => {
+        out(`\nOpen this URL in your browser to authorize:\n\n  ${authorizeUrl}\n\nWaiting for the callback…`);
+      });
+    });
   });
 
 const vaultCmd = program.command("vault").description("manage locally-stored secrets");
