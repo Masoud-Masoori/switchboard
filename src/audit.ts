@@ -24,6 +24,8 @@ export interface AuditEntry {
   response?: unknown;
   /** Upstream error message when an allowed call threw. */
   error?: string;
+  /** Stable `SB_*` taxonomy code for a failure row (deny / approval-denied / upstream error/timeout). */
+  error_code?: string;
 }
 
 export function audit(entry: Omit<AuditEntry, "ts">): void {

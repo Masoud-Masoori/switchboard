@@ -25,6 +25,7 @@ process.env.SWITCHBOARD_AUTO_APPROVE = "1"; // defensive: no approval gate is co
 
 const { Gateway } = await import("../dist/gateway.js");
 const { recentAudit, usageStats } = await import("../dist/audit.js");
+const { listTriggerTemplates, getTriggerTemplate, templateToDefinition } = await import("../dist/trigger-templates.js");
 const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
 const { CallToolRequestSchema, ListToolsRequestSchema } = await import("@modelcontextprotocol/sdk/types.js");
 
@@ -226,6 +227,76 @@ try {
   assert("a firing poll fired (precondition for the accounting check)", fr.fired === true && fr.new_count === 1, JSON.stringify(fr));
   assert("the fire's webhook was delivered (dual delivery confirmed)", trig().length === 1 && trig()[0].json?.type === "switchboard.trigger");
   assert("a firing poll increments usageStats().total by exactly 1 — the poll, never the fire", after - before === 1, `before=${before} after=${after}`);
+
+  // I) PAUSE / RESUME — a paused trigger short-circuits BEFORE the governed poll: no upstream call,
+  //    no fire, NO audit row (usageStats().total is unmoved), and state().paused reflects it. Resume
+  //    restores the full governed poll path and a change that accrued while paused fires on the next poll.
+  assert("pauseTrigger(known id) returns true", t.pauseTrigger("items") === true);
+  assert("isPaused(items) is true after pausing", t.isPaused("items") === true);
+  assert("state().triggers[items].paused mirrors the pause", t.state().triggers.find((x) => x.id === "items")?.paused === true);
+  {
+    items = [{ id: "i1" }, { id: "i2" }, { id: "i3" }, { id: "i4" }, { id: "i5" }]; // a change accrues WHILE paused
+    clear();
+    const totalBefore = usageStats().total;
+    const pr = await t.pollOnce("items");
+    await sleep(250);
+    assert("paused: poll short-circuits with skipped='paused' (not polled)", pr.skipped === "paused" && pr.fired === false && pr.ok === false && pr.baseline === false, JSON.stringify(pr));
+    assert("paused: no trigger webhook is delivered", trig().length === 0, `got ${trig().length}`);
+    assert("paused: no audit row is written (usageStats().total unmoved)", usageStats().total === totalBefore, `before=${totalBefore} after=${usageStats().total}`);
+  }
+  assert("resumeTrigger(known id) returns true", t.resumeTrigger("items") === true);
+  assert("isPaused(items) is false after resuming", t.isPaused("items") === false);
+  assert("state().triggers[items].paused is false after resume", t.state().triggers.find((x) => x.id === "items")?.paused === false);
+  {
+    clear();
+    const totalBefore = usageStats().total;
+    const pr = await t.pollOnce("items"); // the change accrued while paused (i5) is now detected
+    await waitForTrig(1);
+    assert("resume: polling resumes and the accrued change fires (+1)", pr.fired === true && pr.detection === "items" && pr.new_count === 1 && pr.ok === true, JSON.stringify(pr));
+    assert("resume: the fire's webhook is delivered for trigger 'items'", trig().length === 1 && trig()[0].json?.trigger_id === "items", `got ${trig().length}`);
+    assert("resume: the governed poll IS audited again (usageStats().total +1)", usageStats().total === totalBefore + 1, `before=${totalBefore} after=${usageStats().total}`);
+  }
+  assert("pauseTrigger(unknown id) returns false", t.pauseTrigger("does-not-exist") === false);
+  assert("resumeTrigger(unknown id) returns false", t.resumeTrigger("does-not-exist") === false);
+
+  // J) TRIGGER TEMPLATES — the curated poll-recipe catalog (pure data + templateToDefinition).
+  {
+    const tpls = listTriggerTemplates();
+    assert("listTriggerTemplates() returns all 11 recipes", tpls.length === 11, `got ${tpls.length}`);
+    assert("every template has the required fields", tpls.every((x) =>
+      typeof x.id === "string" && x.id.length > 0 &&
+      typeof x.name === "string" && x.name.length > 0 &&
+      typeof x.description === "string" && x.description.length > 0 &&
+      typeof x.category === "string" && x.category.length > 0 &&
+      typeof x.tool_hint === "string" && x.tool_hint.length > 0 &&
+      typeof x.interval_seconds === "number" && x.interval_seconds > 0));
+    assert("template ids are unique", new Set(tpls.map((x) => x.id)).size === tpls.length);
+    assert("getTriggerTemplate(known) resolves", getTriggerTemplate("github-new-issues")?.id === "github-new-issues");
+    assert("getTriggerTemplate(unknown) is undefined", getTriggerTemplate("nope") === undefined);
+
+    // Item-detection recipe → stamps id/tool, defaults name/interval, copies item_path/item_key + default args.
+    const gh = templateToDefinition("github-new-issues", { id: "gh1", tool: "github__list_issues" });
+    assert("templateToDefinition stamps a complete item-detection definition", JSON.stringify(gh) === JSON.stringify({
+      id: "gh1", name: "New GitHub issues", tool: "github__list_issues", interval_seconds: 120, enabled: true, args: { state: "open" }, item_path: "", item_key: "number",
+    }), JSON.stringify(gh));
+
+    // Caller args MERGE on top of the template defaults (template default kept, caller arg added).
+    const ghMerged = templateToDefinition("github-new-issues", { id: "gh2", tool: "github__list_issues", args: { labels: "bug" } });
+    assert("templateToDefinition merges caller args over template defaults", JSON.stringify(ghMerged.args) === JSON.stringify({ state: "open", labels: "bug" }), JSON.stringify(ghMerged.args));
+
+    // name + interval overrides take effect.
+    const ghOver = templateToDefinition("github-new-issues", { id: "gh3", tool: "x", name: "Custom", interval_seconds: 30 });
+    assert("templateToDefinition honors name + interval overrides", ghOver.name === "Custom" && ghOver.interval_seconds === 30, JSON.stringify(ghOver));
+
+    // Hash recipe (no item_path/item_key, no default args) → a clean hash-detection definition.
+    const page = templateToDefinition("http-page-change", { id: "hp", tool: "web__fetch" });
+    assert("hash template yields no item_path/item_key/args", page.item_path === undefined && page.item_key === undefined && page.args === undefined, JSON.stringify(page));
+
+    // An unknown template id fails loud rather than producing a dead trigger.
+    let threw = false;
+    try { templateToDefinition("nope", { id: "x", tool: "y" }); } catch { threw = true; }
+    assert("templateToDefinition throws on an unknown template id", threw);
+  }
 } finally {
   await gateway.shutdown();
   await new Promise((r) => receiver.close(r));

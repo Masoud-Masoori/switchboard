@@ -59,7 +59,10 @@
     "verify:oauth": "node scripts/verify-oauth.mjs",
     "verify:webhook": "node scripts/verify-webhook.mjs",
     "verify:triggers": "node scripts/verify-triggers.mjs",
-    "verify": "npm run build && npm run verify:oauth && npm run verify:webhook && npm run verify:triggers",
+    "verify:modifiers": "node scripts/verify-modifiers.mjs",
+    "verify:httptool": "node scripts/verify-httptool.mjs",
+    "verify:auth": "node scripts/verify-auth.mjs",
+    "verify": "npm run build && npm run verify:oauth && npm run verify:webhook && npm run verify:triggers && npm run verify:modifiers && npm run verify:httptool && npm run verify:auth",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

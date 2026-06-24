@@ -14,10 +14,71 @@ import type { SwitchboardConfig, TriggersConfig } from "./types.js";
 
 const scope = z.enum(["read", "write", "full"]);
 
+// Schema-shaping rules applied to a tool's exposed input schema before agents see it.
+const schemaModifier = z
+  .object({
+    hide_params: z.array(z.string()).optional(),
+    rename_params: z.record(z.string(), z.string()).optional(),
+    trim_description: z.number().int().positive().optional(),
+  })
+  .strict();
+
+// Top-level response-field redaction applied after a successful tool call.
+const responseRedaction = z
+  .object({
+    fields: z.array(z.string()).optional(),
+    replace_with: z.string().optional(),
+  })
+  .strict();
+
+// Declarative auth injection, discriminated on `kind`. All ref fields are vault/env references.
+const authScheme = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("bearer"), ref: z.string().min(1) }).strict(),
+  z
+    .object({
+      kind: z.literal("api_key"),
+      ref: z.string().min(1),
+      header: z.string().optional(),
+      query: z.string().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("basic"),
+      username_ref: z.string().min(1),
+      password_ref: z.string().min(1),
+    })
+    .strict(),
+  z.object({ kind: z.literal("header"), name: z.string().min(1), ref: z.string().min(1) }).strict(),
+]);
+
+// One hand-declared HTTP endpoint exposed as a governed MCP tool (source: http-tool).
+const httpToolDef = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]),
+    path: z.string().optional(),
+    url: z.url().optional(),
+    inputSchema: z.record(z.string(), z.unknown()).optional(),
+    scope: scope.optional(),
+  })
+  .strict()
+  .refine((v) => !!v.path || !!v.url, {
+    message: "each http_tools entry needs a `path` (joined to base_url) or an absolute `url`",
+  });
+
 const toolOverride = z
   .object({
     enabled: z.boolean().optional(),
     policy: scope.optional(),
+    description_override: z.string().optional(),
+    drop_params: z.array(z.string()).optional(),
+    schema_modifiers: schemaModifier.optional(),
+    inject_args: z.record(z.string(), z.string()).optional(),
+    redact_response: responseRedaction.optional(),
+    tags: z.array(z.string()).optional(),
+    important: z.boolean().optional(),
   })
   .strict();
 
@@ -30,7 +91,7 @@ const approval = z
 const serverConfig = z
   .object({
     id: z.string().min(1),
-    source: z.enum(["npx", "binary", "remote", "app2mcp"]),
+    source: z.enum(["npx", "binary", "remote", "app2mcp", "http-tool"]),
     enabled: z.boolean().default(true),
     policy: scope.optional(),
     package: z.string().optional(),
@@ -40,6 +101,12 @@ const serverConfig = z
     auth: z.enum(["none", "oauth", "bearer"]).optional(),
     openapi: z.string().optional(),
     base_url: z.string().optional(),
+    http_tools: z.array(httpToolDef).optional(),
+    auth_scheme: authScheme.optional(),
+    schema_mode: z.enum(["full", "required_only"]).optional(),
+    schema_modifiers: schemaModifier.optional(),
+    inject_args: z.record(z.string(), z.string()).optional(),
+    redact_response: responseRedaction.optional(),
     credentials: z.record(z.string(), z.string()).optional(),
     env: z.record(z.string(), z.string()).optional(),
     tools: z.record(z.string(), toolOverride).optional(),
@@ -96,6 +163,17 @@ const councilProvider = z
   })
   .strict();
 
+// A local OpenAI-compatible server (Ollama / LM Studio / llama.cpp). `base_url` is REQUIRED so the
+// call has a concrete target; `api_key_ref` is OPTIONAL (most local servers need no token) but when
+// present must still be a vault/env reference — never a literal secret in source (NEVER #1).
+const localProvider = z
+  .object({
+    base_url: z.url(),
+    default_model: z.string().min(1),
+    api_key_ref: councilKeyRef.optional(),
+  })
+  .strict();
+
 const council = z
   .object({
     enabled: z.boolean().default(false),
@@ -103,6 +181,7 @@ const council = z
       .object({
         anthropic: councilProvider.optional(),
         openai: councilProvider.optional(),
+        local: localProvider.optional(),
       })
       .strict()
       .optional(),
@@ -184,6 +263,8 @@ const settings = z
       })
       .optional(),
     triggers: triggers.optional(),
+    // Hard wall-clock timeout (ms) applied to every upstream tool call. Cap at 10 min.
+    call_timeout_ms: z.number().int().positive().max(600000).optional(),
   })
   .strict()
   .optional();

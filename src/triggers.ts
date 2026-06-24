@@ -103,6 +103,8 @@ export interface TriggersState {
     name: string | null;
     tool: string;
     enabled: boolean;
+    /** Operator-paused (in-memory): timer still ticks but every poll short-circuits. */
+    paused: boolean;
     interval_seconds: number;
     detection: "items" | "hash";
     baseline: boolean;
@@ -148,6 +150,14 @@ export class TriggerManager {
   private running = false;
   /** Per-trigger in-flight lock so an interval tick and a manual poll never race on state. */
   private readonly inflight = new Map<string, Promise<PollResult>>();
+  /**
+   * Operator-paused trigger ids. A paused trigger keeps its timer running (and its persisted
+   * baseline/seen state) but every poll short-circuits BEFORE the governed `router.callTool`, so
+   * pausing is a zero-side-effect "stop watching for now" — no upstream call, no fire, no audit
+   * row. Deliberately IN-MEMORY only: a pause is a transient operator action, and a process
+   * restart resumes normal polling rather than silently leaving a trigger dark.
+   */
+  private readonly paused = new Set<string>();
 
   constructor(
     private readonly router: Router,
@@ -194,6 +204,30 @@ export class TriggerManager {
     this.start();
   }
 
+  /**
+   * Pause one trigger: its next poll (manual or scheduled) short-circuits before any upstream
+   * call. Returns false for an unknown id so the dashboard can 404 honestly. In-memory only.
+   */
+  pauseTrigger(id: string): boolean {
+    if (!this.defsById().has(id)) return false;
+    this.paused.add(id);
+    log.info(`trigger '${id}' paused`);
+    return true;
+  }
+
+  /** Resume a paused trigger. Returns false for an unknown id. No-op if it was not paused. */
+  resumeTrigger(id: string): boolean {
+    if (!this.defsById().has(id)) return false;
+    this.paused.delete(id);
+    log.info(`trigger '${id}' resumed`);
+    return true;
+  }
+
+  /** Whether a trigger is currently operator-paused. */
+  isPaused(id: string): boolean {
+    return this.paused.has(id);
+  }
+
   /** Poll one trigger exactly once and await the verdict. Concurrent calls share one in-flight poll. */
   pollOnce(id: string): Promise<PollResult> {
     const existing = this.inflight.get(id);
@@ -219,6 +253,7 @@ export class TriggerManager {
           name: d.name ?? null,
           tool: d.tool,
           enabled: d.enabled !== false,
+          paused: this.paused.has(d.id),
           interval_seconds: d.interval_seconds ?? interval,
           detection: d.item_path && d.item_key ? "items" : "hash",
           baseline: s?.baseline ?? false,
@@ -253,6 +288,8 @@ export class TriggerManager {
     const def = this.defsById().get(id);
     if (!def) return { id, ok: false, fired: false, new_count: 0, baseline: false, skipped: "unknown trigger" };
     if (def.enabled === false) return { id, ok: false, fired: false, new_count: 0, baseline: false, skipped: "disabled" };
+    // Operator-paused: short-circuit BEFORE the governed poll. No upstream call, no fire, no audit.
+    if (this.paused.has(id)) return { id, ok: false, fired: false, new_count: 0, baseline: false, skipped: "paused" };
 
     const st = this.ensureState(id);
 

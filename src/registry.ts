@@ -28,6 +28,8 @@ import type { Scope, ServerConfig } from "./types.js";
 import type { Vault } from "./vault.js";
 import type { OAuthStore } from "./oauth.js";
 import { buildOpenApiServer } from "./openapi.js";
+import { buildHttpToolServer } from "./httptool.js";
+import { authSchemeEnv, authSchemeHeaders } from "./authscheme.js";
 import { log } from "./logger.js";
 
 /** `${oauth:provider}` reference — resolved to a bare access token at mount time. */
@@ -75,6 +77,14 @@ export class Registry {
       // our client over an in-memory transport. Credentials become request headers,
       // resolved lazily (per call) so OAuth tokens can refresh between invocations.
       const generated = await buildOpenApiServer(config, () => this.resolveHeaders(config));
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await generated.server.connect(serverTransport);
+      await client.connect(clientTransport);
+      scopeHints = generated.scopeHints;
+    } else if (config.source === "http-tool") {
+      // Hand-declared HTTP endpoints → an in-process MCP server, linked over an in-memory
+      // transport exactly like app2mcp. Auth headers resolve lazily per call (OAuth-refresh-safe).
+      const generated = await buildHttpToolServer(config, () => this.resolveHeaders(config));
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
       await generated.server.connect(serverTransport);
       await client.connect(clientTransport);
@@ -168,17 +178,25 @@ export class Registry {
     }
     for (const [k, v] of Object.entries(config.env ?? {})) env[k] = this.vault.resolve(v);
     for (const [k, v] of Object.entries(config.credentials ?? {})) env[k] = await this.resolveRef(v);
+    if (config.auth_scheme) {
+      Object.assign(env, await authSchemeEnv(config.auth_scheme, (ref) => this.resolveRef(ref)));
+    }
     return env;
   }
 
   /**
-   * Render a config's `credentials` map into HTTP request headers for remote / app2mcp
-   * sources, resolving every `${vault:}` / `${env:}` / `${oauth:}` reference (fail-closed).
+   * Render a config's auth into HTTP request headers for remote / app2mcp / http-tool sources,
+   * resolving every `${vault:}` / `${env:}` / `${oauth:}` reference (fail-closed). The explicit
+   * `credentials` map is applied first; a declarative `auth_scheme` layers on top (and wins on
+   * a key collision) as the higher-level shorthand.
    */
   private async resolveHeaders(config: ServerConfig): Promise<Record<string, string>> {
     const headers: Record<string, string> = {};
     for (const [k, v] of Object.entries(config.credentials ?? {})) {
       headers[k] = await this.resolveRef(v);
+    }
+    if (config.auth_scheme) {
+      Object.assign(headers, await authSchemeHeaders(config.auth_scheme, (ref) => this.resolveRef(ref)));
     }
     return headers;
   }

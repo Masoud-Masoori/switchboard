@@ -19,6 +19,7 @@
  * human confirm. Every verdict is written to the audit log.
  */
 
+import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { Registry, MountedServer } from "./registry.js";
 import type { SwitchboardConfig } from "./types.js";
@@ -26,6 +27,13 @@ import { evaluate } from "./policy.js";
 import { approve } from "./approval.js";
 import { audit, sanitizeForAudit, type AuditEntry } from "./audit.js";
 import { deliverWebhook, type SecretResolver, type WebhookEvent } from "./webhook.js";
+import {
+  shapeExposedTool,
+  applyArgTransforms,
+  applyResponseRedaction,
+  removedRequiredNotInjected,
+} from "./transforms.js";
+import { SB_ERR, SB_HINTS, type SbErrorCode } from "./errors.js";
 import { log } from "./logger.js";
 
 const SEP = "__";
@@ -34,8 +42,13 @@ const SEP = "__";
  *  namespaced upstream tool, which always contains the `__` separator. */
 const FIND_TOOLS = "find_tools";
 const CALL_TOOL = "call_tool";
+const BATCH_CALL = "batch_call";
 const DEFAULT_SEARCH_LIMIT = 10;
 const MAX_SEARCH_LIMIT = 50;
+/** Cap on tool calls per `batch_call` request — a runaway guard, not a quota. */
+const MAX_BATCH_CALLS = 20;
+/** The four MCP annotation hints that can be used as `find_tools` tag filters. */
+const ANNOTATION_TAGS = ["readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"] as const;
 
 interface ExposedTool {
   /** Name as the downstream client sees it. */
@@ -51,8 +64,32 @@ export class Router {
     private readonly resolveSecret: SecretResolver,
   ) {}
 
+  /** Tool keys we've already warned about (shaping removed a required param with no injected
+   *  value). Deduped for this Router's lifetime so a per-listTools call can't spam the log. */
+  private readonly warned = new Set<string>();
+
   private get mode(): "namespaced" | "flat" | "search" {
     return this.cfg.gateway.tool_exposure;
+  }
+
+  private warnOnce(key: string, message: string): void {
+    if (this.warned.has(key)) return;
+    this.warned.add(key);
+    log.warn(message);
+  }
+
+  /** Property names declared on a tool's input schema (empty when none). */
+  private schemaPropNames(tool: Tool): string[] {
+    const schema = tool.inputSchema as { properties?: Record<string, unknown> } | undefined;
+    const props = schema?.properties;
+    return props && typeof props === "object" ? Object.keys(props) : [];
+  }
+
+  /** Coerce an arbitrary value into a non-empty Set of strings, or undefined. */
+  private stringSet(value: unknown): Set<string> | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const items = value.filter((v): v is string => typeof v === "string" && v.length > 0);
+    return items.length ? new Set(items) : undefined;
   }
 
   /** Build the governed tool list exposed to downstream clients. */
@@ -81,6 +118,20 @@ export class Router {
               type: "number",
               description: `Max results to return (default ${DEFAULT_SEARCH_LIMIT}, max ${MAX_SEARCH_LIMIT}).`,
             },
+            servers: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Optional: restrict the search to these server ids (e.g. ['github','slack']). " +
+                "Omit to search every connected server.",
+            },
+            tags: {
+              type: "array",
+              items: { type: "string", enum: [...ANNOTATION_TAGS] },
+              description:
+                "Optional: only return tools whose annotations assert ALL of these hints — e.g. " +
+                "['readOnlyHint'] for safe read-only tools, ['destructiveHint'] for mutating ones.",
+            },
           },
           required: ["query"],
         },
@@ -103,6 +154,35 @@ export class Router {
           required: ["name"],
         },
       },
+      {
+        name: BATCH_CALL,
+        description:
+          "Invoke several tools in one request. Each entry is governed, approval-gated, and " +
+          "audited independently — exactly as if called via `call_tool`. Returns a `results` " +
+          `array in the same order; a failure in one call never aborts the others. Up to ${MAX_BATCH_CALLS} calls.`,
+        inputSchema: {
+          type: "object",
+          properties: {
+            calls: {
+              type: "array",
+              description: "Tool calls to run, each `{ name, arguments? }`.",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string", description: "Exact tool name (e.g. 'github__create_issue')." },
+                  arguments: {
+                    type: "object",
+                    description: "Arguments object for that tool.",
+                    additionalProperties: true,
+                  },
+                },
+                required: ["name"],
+              },
+            },
+          },
+          required: ["calls"],
+        },
+      },
     ];
   }
 
@@ -116,8 +196,9 @@ export class Router {
     for (const server of this.registry.list()) {
       if (server.config.enabled === false) continue;
       for (const tool of server.tools) {
+        const override = server.config.tools?.[tool.name];
         // A tool explicitly disabled in config is never exposed at all.
-        if (server.config.tools?.[tool.name]?.enabled === false) continue;
+        if (override?.enabled === false) continue;
 
         const exposedName = flat ? tool.name : `${server.config.id}${SEP}${tool.name}`;
         if (claimed.has(exposedName)) {
@@ -125,32 +206,72 @@ export class Router {
           continue;
         }
         claimed.add(exposedName);
-        out.push({ exposedName, server, tool });
+
+        // If shaping removes a required param without injecting a value, agents can't satisfy
+        // the upstream call — warn once so the misconfiguration is visible (the tool is still
+        // exposed; the upstream remains the source of truth for what it will accept).
+        const orphaned = removedRequiredNotInjected(tool, server.config, override);
+        if (orphaned.length) {
+          this.warnOnce(
+            `${exposedName}:${orphaned.join(",")}`,
+            `tool '${exposedName}' hides/drops required param(s) [${orphaned.join(", ")}] with no inject_args value — calls may fail upstream`,
+          );
+        }
+
+        // Shape the tool AS AGENTS SEE IT (description/params/schema). forward() still resolves
+        // the RAW upstream name + transforms args, so shaping only affects the exposed surface.
+        out.push({ exposedName, server, tool: shapeExposedTool(tool, server.config, override) });
       }
     }
     return out;
   }
 
-  /** Rank the exposed tools against a free-text query. Dependency-free keyword scoring. */
-  private search(query: string, limit: number): Tool[] {
-    const tokens = query.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-    const scored = this.exposed().map(({ exposedName, tool }) => {
+  /** Rank the exposed tools against a free-text query. Dependency-free keyword scoring, with
+   *  optional pre-filtering by server id and by annotation tag. A tool passes the tag filter
+   *  only if it POSITIVELY asserts every requested hint (`annotations[tag] === true`). */
+  private search(
+    query: string,
+    limit: number,
+    serverFilter?: Set<string>,
+    tagFilter?: Set<string>,
+  ): Tool[] {
+    const lcQuery = query.toLowerCase();
+    const tokens = lcQuery.split(/[^a-z0-9]+/).filter(Boolean);
+
+    let pool = this.exposed();
+    if (serverFilter && serverFilter.size) pool = pool.filter((e) => serverFilter.has(e.server.id));
+    if (tagFilter && tagFilter.size) {
+      pool = pool.filter((e) => {
+        const ann = e.tool.annotations as Record<string, unknown> | undefined;
+        return Array.from(tagFilter).every((tag) => ann?.[tag] === true);
+      });
+    }
+
+    const scored = pool.map(({ exposedName, server, tool }) => {
       const name = exposedName.toLowerCase();
       const desc = (tool.description ?? "").toLowerCase();
+      const override = server.config.tools?.[tool.name];
+      const propNames = this.schemaPropNames(tool).map((p) => p.toLowerCase());
+      const toolTags = (override?.tags ?? []).map((t) => t.toLowerCase());
       let score = 0;
+      if (name === lcQuery) score += 10; // exact tool-name match jumps to the top
       for (const t of tokens) {
         if (name.includes(t)) score += 3;
         if (desc.includes(t)) score += 1;
+        if (propNames.some((p) => p.includes(t))) score += 1; // input-property token
+        if (toolTags.includes(t)) score += 2; // operator-assigned tag token
       }
       // Phrase bonus: the whole query landing in the description is a strong signal.
-      if (tokens.length > 1 && desc.includes(query.toLowerCase())) score += 2;
+      if (tokens.length > 1 && desc.includes(lcQuery)) score += 2;
+      if (override?.important) score += 5; // operator-flagged important tool
       return { score, tool: { ...tool, name: exposedName } as Tool };
     });
 
     const ranked = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
-    // No keyword hits → fall back to the first N tools so the agent still gets a catalogue.
-    const pool = ranked.length > 0 ? ranked.map((s) => s.tool) : scored.map((s) => s.tool);
-    return pool.slice(0, limit);
+    // No keyword hits → fall back to the first N tools (already server/tag-filtered) so the
+    // agent still gets a catalogue narrowed to what it asked for.
+    const result = ranked.length > 0 ? ranked.map((s) => s.tool) : scored.map((s) => s.tool);
+    return result.slice(0, limit);
   }
 
   /** Resolve a downstream tool name back to its upstream (server, realToolName). */
@@ -176,6 +297,7 @@ export class Router {
     if (this.mode === "search") {
       if (exposedName === FIND_TOOLS) return this.handleFind(args);
       if (exposedName === CALL_TOOL) return this.handleCall(args);
+      if (exposedName === BATCH_CALL) return this.handleBatch(args);
       // Direct call by namespaced name still works as a convenience.
     }
     return this.forward(exposedName, args);
@@ -184,11 +306,13 @@ export class Router {
   /** `find_tools` meta-tool — discovery only, never touches an upstream. */
   private handleFind(args: Record<string, unknown>): CallToolResult {
     const query = typeof args.query === "string" ? args.query : "";
-    if (!query.trim()) return this.error("find_tools requires a non-empty 'query'");
+    if (!query.trim()) return this.error("find_tools requires a non-empty 'query'", SB_ERR.BAD_REQUEST);
     const rawLimit = typeof args.limit === "number" ? args.limit : DEFAULT_SEARCH_LIMIT;
     const limit = Math.max(1, Math.min(MAX_SEARCH_LIMIT, Math.floor(rawLimit)));
+    const serverFilter = this.stringSet(args.servers);
+    const tagFilter = this.stringSet(args.tags);
 
-    const matches = this.search(query, limit).map((t) => ({
+    const matches = this.search(query, limit, serverFilter, tagFilter).map((t) => ({
       name: t.name,
       description: t.description ?? "",
       inputSchema: t.inputSchema,
@@ -200,7 +324,7 @@ export class Router {
   /** `call_tool` meta-tool — unwrap the target and route it through the governed path. */
   private handleCall(args: Record<string, unknown>): Promise<CallToolResult> {
     const name = typeof args.name === "string" ? args.name : "";
-    if (!name) return Promise.resolve(this.error("call_tool requires a 'name'"));
+    if (!name) return Promise.resolve(this.error("call_tool requires a 'name'", SB_ERR.BAD_REQUEST));
     const inner =
       args.arguments && typeof args.arguments === "object"
         ? (args.arguments as Record<string, unknown>)
@@ -208,17 +332,48 @@ export class Router {
     return this.forward(name, inner);
   }
 
+  /** `batch_call` meta-tool — run several governed calls in one request. Each entry goes through
+   *  the SAME forward() path (policy → approval → audit), so a batch is just a convenience over N
+   *  call_tool invocations: one failing call never aborts the rest. */
+  private async handleBatch(args: Record<string, unknown>): Promise<CallToolResult> {
+    const calls = Array.isArray(args.calls) ? args.calls : null;
+    if (!calls) return this.error("batch_call requires a 'calls' array", SB_ERR.BAD_REQUEST);
+    if (calls.length === 0) return this.error("batch_call 'calls' array is empty", SB_ERR.BAD_REQUEST);
+    if (calls.length > MAX_BATCH_CALLS) {
+      return this.error(`batch_call accepts at most ${MAX_BATCH_CALLS} calls per request`, SB_ERR.BAD_REQUEST);
+    }
+
+    const results = await Promise.all(
+      calls.map(async (raw) => {
+        const entry = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+        const name = typeof entry.name === "string" ? entry.name : "";
+        if (!name) {
+          const errored = this.error("batch entry missing 'name'", SB_ERR.BAD_REQUEST);
+          return { name: "", isError: true, content: errored.content };
+        }
+        const inner =
+          entry.arguments && typeof entry.arguments === "object"
+            ? (entry.arguments as Record<string, unknown>)
+            : {};
+        const res = await this.forward(name, inner);
+        return { name, isError: res.isError === true, content: res.content };
+      }),
+    );
+    return { content: [{ type: "text", text: JSON.stringify({ results }, null, 2) }] };
+  }
+
   /** Govern, then forward, a real tool call to its upstream server. */
   private async forward(exposedName: string, args: Record<string, unknown>): Promise<CallToolResult> {
     const target = this.resolve(exposedName);
-    if (!target) return this.error(`unknown tool '${exposedName}'`);
+    if (!target) return this.error(`unknown tool '${exposedName}'`, SB_ERR.UNKNOWN_TOOL);
 
     const { server, toolName } = target;
+    const override = server.config.tools?.[toolName];
     const verdict = evaluate(server.config, toolName, this.cfg, server.scopeHints?.[toolName]);
 
     if (verdict.decision === "deny") {
-      this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: verdict.reason });
-      return this.error(`denied by policy: ${verdict.reason}`);
+      this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: verdict.reason, error_code: SB_ERR.POLICY_DENY });
+      return this.error(`denied by policy: ${verdict.reason}`, SB_ERR.POLICY_DENY);
     }
 
     // Settle the approval gate before executing. A denied approval is the only path that
@@ -232,16 +387,35 @@ export class Router {
       this.fireWebhook({ decision: "approval_required", server: server.id, tool: toolName, scope: verdict.scope, reason: verdict.reason });
       const allowed = await approve(server.id, toolName, verdict.scope, verdict.reason);
       if (!allowed) {
-        this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: "approval denied/unavailable" });
-        return this.error(`approval required and not granted for '${exposedName}'`);
+        this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: "approval denied/unavailable", error_code: SB_ERR.APPROVAL_DENIED });
+        return this.error(`approval required and not granted for '${exposedName}'`, SB_ERR.APPROVAL_DENIED);
       }
       reason = "approved";
     }
 
+    // Reverse renamed params and overlay injected/pinned values — this is what is actually sent
+    // upstream, and what the audit row records (so the log shows the real call, not the agent's
+    // pre-transform args). A malformed transform is a BAD_REQUEST, not an upstream failure.
+    let finalArgs: Record<string, unknown>;
+    try {
+      finalArgs = applyArgTransforms(args, server.config, override, this.resolveSecret);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: `arg transform failed: ${msg}`, error_code: SB_ERR.BAD_REQUEST });
+      return this.error(`could not prepare arguments for '${exposedName}': ${msg}`, SB_ERR.BAD_REQUEST);
+    }
+
+    // Native per-call timeout (ms) — the SDK throws an McpError with ErrorCode.RequestTimeout
+    // when it elapses, which we map to a distinct SB_UPSTREAM_TIMEOUT below.
+    const timeoutMs = this.cfg.settings?.call_timeout_ms;
+    const callOpts = typeof timeoutMs === "number" ? { timeout: timeoutMs } : undefined;
+
     const capture = this.cfg.settings?.logs?.capture_io === true;
     const start = Date.now();
     try {
-      const result = (await server.client.callTool({ name: toolName, arguments: args })) as CallToolResult;
+      const raw = (await server.client.callTool({ name: toolName, arguments: finalArgs }, undefined, callOpts)) as CallToolResult;
+      // Redact configured top-level response fields before the agent (or the audit row) sees them.
+      const result = applyResponseRedaction(raw, server.config, override);
       this.record({
         server: server.id,
         tool: toolName,
@@ -249,11 +423,13 @@ export class Router {
         decision: "allow",
         reason,
         duration_ms: Date.now() - start,
-        ...(capture ? { request: sanitizeForAudit(args), response: sanitizeForAudit(result) } : {}),
-        ...(result.isError ? { error: this.resultErrorText(result) } : {}),
+        ...(capture ? { request: sanitizeForAudit(finalArgs), response: sanitizeForAudit(result) } : {}),
+        ...(result.isError ? { error: this.resultErrorText(result), error_code: SB_ERR.UPSTREAM_ERROR } : {}),
       });
       return result;
     } catch (err) {
+      const timedOut = err instanceof McpError && err.code === ErrorCode.RequestTimeout;
+      const code: SbErrorCode = timedOut ? SB_ERR.UPSTREAM_TIMEOUT : SB_ERR.UPSTREAM_ERROR;
       const msg = err instanceof Error ? err.message : String(err);
       this.record({
         server: server.id,
@@ -262,10 +438,12 @@ export class Router {
         decision: "allow",
         reason,
         duration_ms: Date.now() - start,
-        ...(capture ? { request: sanitizeForAudit(args) } : {}),
+        ...(capture ? { request: sanitizeForAudit(finalArgs) } : {}),
         error: msg,
+        error_code: code,
       });
-      return this.error(`upstream '${server.id}' failed calling '${toolName}': ${msg}`);
+      const verb = timedOut ? `timed out after ${timeoutMs}ms calling` : `failed calling`;
+      return this.error(`upstream '${server.id}' ${verb} '${toolName}': ${msg}`, code);
     }
   }
 
@@ -303,7 +481,14 @@ export class Router {
     return parts.join(" ").trim() || "upstream returned an error result";
   }
 
-  private error(message: string): CallToolResult {
-    return { isError: true, content: [{ type: "text", text: `[switchboard] ${message}` }] };
+  /** Build an error result. When a `SB_*` code is supplied, the text is structured JSON carrying
+   *  the message, the stable code, and a one-line actionable hint — so an agent gets a fixable
+   *  failure instead of an opaque string. Without a code it stays plain text (back-compat). */
+  private error(message: string, code?: SbErrorCode): CallToolResult {
+    const text =
+      code === undefined
+        ? `[switchboard] ${message}`
+        : JSON.stringify({ error: `[switchboard] ${message}`, code, hint: SB_HINTS[code] });
+    return { isError: true, content: [{ type: "text", text }] };
   }
 }

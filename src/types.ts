@@ -15,6 +15,75 @@ export interface ToolOverride {
   enabled?: boolean;
   /** Pin the scope for this tool instead of inferring it from the name. */
   policy?: Scope;
+  /** Replace the description agents see for this tool (the upstream call is unaffected). */
+  description_override?: string;
+  /** Parameters dropped from the exposed input schema; also filtered out of `required`. */
+  drop_params?: string[];
+  /** Hide/rename params + trim description on the exposed schema. Overrides the server-level
+   *  modifier per field (lists union, `trim_description` takes the tool value). */
+  schema_modifiers?: SchemaModifier;
+  /** Force argument values before forwarding. Values may be `${vault:..}`/`${env:..}` refs or
+   *  literals; the resolved value always wins over an agent-supplied one. Keys are UPSTREAM
+   *  parameter names (apply after any rename). */
+  inject_args?: Record<string, string>;
+  /** Redact top-level JSON fields from this tool's response before it reaches the agent. */
+  redact_response?: ResponseRedaction;
+  /** Free-text tags that boost this tool in `find_tools` keyword ranking. */
+  tags?: string[];
+  /** Mark this tool important so it ranks higher in `find_tools` search. */
+  important?: boolean;
+}
+
+/** Schema-shaping rules applied to a tool's exposed input schema before agents see it. */
+export interface SchemaModifier {
+  /** Parameters removed from the exposed schema (and from `required`). */
+  hide_params?: string[];
+  /**
+   * Rename exposed parameters, e.g. `{ owner: "org" }` shows `org` to the agent. The gateway
+   * reverse-maps the renamed key back to the upstream name before forwarding, so the upstream
+   * keeps receiving its real parameter name.
+   */
+  rename_params?: Record<string, string>;
+  /** Truncate the tool description to at most N characters. */
+  trim_description?: number;
+}
+
+/** Top-level response-field redaction applied after a successful tool call. */
+export interface ResponseRedaction {
+  /** Top-level JSON keys to remove (or mask) in the tool's text result. */
+  fields?: string[];
+  /** When set, replace each field's value with this string; when omitted, the key is deleted. */
+  replace_with?: string;
+}
+
+/**
+ * Declarative auth injection for a server. Resolved per call so OAuth/vault values stay fresh,
+ * then mapped to the right HTTP header (remote/app2mcp/http-tool) or env var (stdio). All `*_ref`
+ * fields accept `${vault:..}`/`${env:..}` references — Switchboard never custodies a plaintext key.
+ */
+export type AuthScheme =
+  | { kind: "bearer"; ref: string }
+  | { kind: "api_key"; ref: string; header?: string; query?: string }
+  | { kind: "basic"; username_ref: string; password_ref: string }
+  | { kind: "header"; name: string; ref: string };
+
+/** One hand-declared HTTP endpoint exposed as a governed MCP tool (`source: http-tool`). */
+export interface HttpToolDef {
+  /** Tool name as agents see it (namespaced under the server id). */
+  name: string;
+  /** Human description shown to agents. */
+  description?: string;
+  /** HTTP method; also derives the scope ceiling (GET/HEAD→read, DELETE→full, else write). */
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+  /** Path appended to the server `base_url` (e.g. `/v1/items/{id}`). `{name}` segments are filled
+   *  from same-named args. Provide this OR an absolute `url`. */
+  path?: string;
+  /** Absolute URL to call instead of `base_url` + `path`. */
+  url?: string;
+  /** JSON Schema for the tool's arguments. Defaults to an open object when omitted. */
+  inputSchema?: Record<string, unknown>;
+  /** Per-tool scope ceiling. Only TIGHTENS the verb-derived scope; never relaxes a DELETE to read. */
+  scope?: Scope;
 }
 
 /** Approval-gate config for a server. */
@@ -25,7 +94,13 @@ export interface ApprovalConfig {
 
 /** How an upstream MCP server is sourced. `council` is synthetic — built in-process from
  *  `settings.council`, never declared in the user's `servers:` array. */
-export type ServerSource = "npx" | "binary" | "remote" | "app2mcp" | "council";
+export type ServerSource =
+  | "npx"
+  | "binary"
+  | "remote"
+  | "app2mcp"
+  | "http-tool"
+  | "council";
 
 /** One mounted (or mountable) upstream MCP server. */
 export interface ServerConfig {
@@ -51,11 +126,30 @@ export interface ServerConfig {
   /** Auth strategy for a remote server. */
   auth?: "none" | "oauth" | "bearer";
 
-  // --- app2mcp source (roadmap) ---
+  // --- app2mcp source ---
   /** Path to an OpenAPI/Swagger spec to generate an MCP server from. */
   openapi?: string;
-  /** Base URL the generated server calls. */
+  /** Base URL the generated server calls (also the base for `http-tool` relative paths). */
   base_url?: string;
+
+  // --- http-tool source ---
+  /** Hand-declared HTTP endpoints exposed as governed MCP tools (source: http-tool). */
+  http_tools?: HttpToolDef[];
+
+  // --- auth + schema shaping (any source) ---
+  /**
+   * Declarative auth injection resolved per call and mapped to a header (remote/app2mcp/http-tool)
+   * or env var (stdio). Higher-level alternative to hand-writing `credentials`/`env` entries.
+   */
+  auth_scheme?: AuthScheme;
+  /** `full` (default) exposes every input property; `required_only` slims schemas to required params. */
+  schema_mode?: "full" | "required_only";
+  /** Server-wide schema shaping (hide/rename params, trim descriptions); merged with per-tool modifiers. */
+  schema_modifiers?: SchemaModifier;
+  /** Server-wide forced args (upstream-named keys); per-tool `inject_args` overrides on key collision. */
+  inject_args?: Record<string, string>;
+  /** Server-wide response-field redaction; a per-tool `redact_response` overrides it. */
+  redact_response?: ResponseRedaction;
 
   // --- shared ---
   /** Secrets injected into the upstream env. Values may use `${vault:..}`/`${env:..}`. */
@@ -138,6 +232,12 @@ export interface SettingsConfig {
    * by default. See `TriggersConfig`.
    */
   triggers?: TriggersConfig;
+  /**
+   * Hard wall-clock timeout (ms) applied to every upstream tool call. A slow or hung upstream is
+   * cut off and surfaced as an `SB_UPSTREAM_TIMEOUT` error instead of blocking the agent forever.
+   * Omitted = no Switchboard-imposed timeout (the transport's own default applies).
+   */
+  call_timeout_ms?: number;
 }
 
 /**
@@ -218,6 +318,21 @@ export interface CouncilProviderConfig {
 }
 
 /**
+ * A LOCAL, OpenAI-compatible model server (Ollama, LM Studio, llama.cpp, vLLM, …). The headline
+ * "zero-cloud, zero-key" path: point `base_url` at the local server and the council/playground run
+ * entirely offline. `api_key_ref` is OPTIONAL — most local servers need no token — but when present
+ * it must still be a `${vault:..}`/`${env:..}` reference (Switchboard never custodies a plaintext key).
+ */
+export interface LocalProviderConfig {
+  /** OpenAI-compatible base URL, e.g. `http://127.0.0.1:11434/v1` (Ollama) or `http://127.0.0.1:1234/v1` (LM Studio). */
+  base_url: string;
+  /** Default model id served locally (e.g. `llama3.1`, `qwen2.5-coder`, `mistral`). */
+  default_model: string;
+  /** Optional `${vault:..}`/`${env:..}` reference if the local server enforces a bearer token. */
+  api_key_ref?: string;
+}
+
+/**
  * `council_consult` proxies one prompt to the *other* provider and returns the reply;
  * `council_debate` runs a bounded multi-round exchange between both and synthesizes.
  * Both flow through the normal policy → approval → audit path as a synthetic in-process
@@ -230,6 +345,8 @@ export interface CouncilConfig {
   providers?: {
     anthropic?: CouncilProviderConfig;
     openai?: CouncilProviderConfig;
+    /** A local OpenAI-compatible model server — the zero-cloud, zero-key option. */
+    local?: LocalProviderConfig;
   };
   /** Hard ceiling on `council_debate` rounds (loop guard). Default 3, max 10. */
   max_rounds?: number;

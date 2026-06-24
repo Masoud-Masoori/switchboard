@@ -19,7 +19,7 @@
  * governance decision itself.
  */
 
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { SwitchboardConfig } from "./types.js";
 import { log } from "./logger.js";
 
@@ -59,6 +59,74 @@ export interface TriggerWebhookEvent {
 }
 
 const TIMEOUT_MS = 8000;
+/** Standard Webhooks replay window: a delivery whose timestamp drifts past this is rejected. */
+const DEFAULT_TOLERANCE_SEC = 300;
+
+/**
+ * Standard Webhooks (standardwebhooks.com) signature: HMAC-SHA256 over `${id}.${timestamp}.${payload}`,
+ * returned in the spec's `v1,<base64>` form. This is the interoperable scheme Svix/Stripe-style
+ * receiver libraries already verify, so a Switchboard delivery drops straight into existing tooling.
+ */
+function signStandardWebhook(id: string, timestamp: number, payload: string, secret: string): string {
+  return "v1," + createHmac("sha256", secret).update(`${id}.${timestamp}.${payload}`).digest("base64");
+}
+
+/**
+ * The full signature header set for one signed delivery: the Standard Webhooks triple
+ * (`webhook-id` / `webhook-timestamp` / `webhook-signature`) so any spec-compliant receiver can
+ * verify, PLUS the legacy `x-switchboard-signature: sha256=<hex over body>` for receivers built
+ * against the older scheme. Both sign the SAME body; a receiver may check either.
+ */
+function signatureHeaders(payload: string, secret: string): Record<string, string> {
+  const id = randomUUID();
+  const timestamp = Math.floor(Date.now() / 1000);
+  return {
+    "webhook-id": id,
+    "webhook-timestamp": String(timestamp),
+    "webhook-signature": signStandardWebhook(id, timestamp, payload, secret),
+    "x-switchboard-signature": "sha256=" + createHmac("sha256", secret).update(payload).digest("hex"),
+  };
+}
+
+/** Input to {@link verifyWebhook}: the three Standard Webhooks header values plus the raw body. */
+export interface VerifyWebhookInput {
+  /** `webhook-id` header value. */
+  id: string;
+  /** `webhook-timestamp` header value (unix seconds; string or number both accepted). */
+  timestamp: string | number;
+  /** The exact raw request body that was signed. */
+  payload: string;
+  /** The resolved signing secret — the same value the sender used. */
+  secret: string;
+  /** `webhook-signature` header value: one or more space-delimited `v1,<base64>` signatures. */
+  signature: string;
+  /** Replay window in seconds (default 300). */
+  toleranceSec?: number;
+}
+
+/**
+ * Verify a Standard Webhooks delivery. Enforces the replay window on `timestamp`, recomputes the
+ * `v1,<base64>` signature over `${id}.${timestamp}.${payload}`, and constant-time compares it
+ * against each space-delimited candidate in `signature` (so key rotation / multiple signatures
+ * work). Returns true iff the timestamp is fresh AND some candidate matches. Never throws — a
+ * malformed timestamp, an empty signature, or a length mismatch all return false.
+ */
+export function verifyWebhook(input: VerifyWebhookInput): boolean {
+  const { id, payload, secret, signature } = input;
+  const toleranceSec = input.toleranceSec ?? DEFAULT_TOLERANCE_SEC;
+  const ts = typeof input.timestamp === "number" ? input.timestamp : Number(input.timestamp);
+  if (!Number.isFinite(ts)) return false;
+  if (Math.abs(Math.floor(Date.now() / 1000) - ts) > toleranceSec) return false;
+
+  const expected = Buffer.from(signStandardWebhook(id, ts, payload, secret));
+  for (const candidate of signature.split(" ")) {
+    const sig = candidate.trim();
+    if (!sig.startsWith("v1,")) continue;
+    const buf = Buffer.from(sig);
+    if (buf.length === expected.length && timingSafeEqual(buf, expected)) return true;
+  }
+  return false;
+}
 
 /**
  * Notify the configured webhook of one decision. Returns immediately; the POST runs detached.
@@ -88,8 +156,7 @@ export function deliverWebhook(cfg: SwitchboardConfig, event: WebhookEvent, reso
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (wh.secret_ref) {
     try {
-      const secret = resolveSecret(wh.secret_ref);
-      headers["x-switchboard-signature"] = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+      Object.assign(headers, signatureHeaders(payload, resolveSecret(wh.secret_ref)));
     } catch {
       // A signature was promised but the secret is unavailable: drop rather than send an
       // unsigned event the receiver will reject. Never throws into the caller.
@@ -143,8 +210,7 @@ export function deliverTriggerWebhook(
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (wh.secret_ref) {
     try {
-      const secret = resolveSecret(wh.secret_ref);
-      headers["x-switchboard-signature"] = "sha256=" + createHmac("sha256", secret).update(payload).digest("hex");
+      Object.assign(headers, signatureHeaders(payload, resolveSecret(wh.secret_ref)));
     } catch {
       // Promised a signature we can't produce: drop rather than send an unsigned event. Never throws.
       log.warn(`webhook: cannot resolve secret '${wh.secret_ref}', dropping trigger '${event.trigger_id}' notification`);

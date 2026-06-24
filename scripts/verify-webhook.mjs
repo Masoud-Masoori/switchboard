@@ -17,6 +17,7 @@ process.env.SWITCHBOARD_AUTO_APPROVE = "1"; // write_thing's approval gate resol
 
 const { Gateway } = await import("../dist/gateway.js");
 const { recentAudit } = await import("../dist/audit.js");
+const { verifyWebhook } = await import("../dist/webhook.js");
 const { Server } = await import("@modelcontextprotocol/sdk/server/index.js");
 const { CallToolRequestSchema, ListToolsRequestSchema } = await import("@modelcontextprotocol/sdk/types.js");
 
@@ -114,6 +115,34 @@ try {
     assert("allow payload carries server/tool/scope", d?.json?.server === "echo" && d?.json?.tool === "read_thing" && d?.json?.scope === "read");
     assert("allow payload carries duration_ms", typeof d?.json?.duration_ms === "number");
     assert("allow signature verifies (HMAC-SHA256 over raw body)", d?.headers?.["x-switchboard-signature"] === sign(d.raw), d?.headers?.["x-switchboard-signature"]);
+
+    // Standard Webhooks (standardwebhooks.com) triple is delivered ALONGSIDE the legacy header.
+    assert("delivery carries a webhook-id (uuid)", typeof d?.headers?.["webhook-id"] === "string" && /^[0-9a-f-]{36}$/.test(d.headers["webhook-id"]), d?.headers?.["webhook-id"]);
+    assert("delivery carries a numeric webhook-timestamp (unix seconds)", /^\d+$/.test(d?.headers?.["webhook-timestamp"] ?? ""), d?.headers?.["webhook-timestamp"]);
+    assert("delivery carries a v1, webhook-signature", (d?.headers?.["webhook-signature"] ?? "").startsWith("v1,"), d?.headers?.["webhook-signature"]);
+
+    // verifyWebhook round-trips the real delivery, and rejects every tamper.
+    const wh = d.headers;
+    assert(
+      "verifyWebhook accepts a genuine delivery",
+      verifyWebhook({ id: wh["webhook-id"], timestamp: wh["webhook-timestamp"], payload: d.raw, secret: SECRET, signature: wh["webhook-signature"] }) === true,
+    );
+    assert(
+      "verifyWebhook rejects a tampered body",
+      verifyWebhook({ id: wh["webhook-id"], timestamp: wh["webhook-timestamp"], payload: d.raw + " ", secret: SECRET, signature: wh["webhook-signature"] }) === false,
+    );
+    assert(
+      "verifyWebhook rejects the wrong secret",
+      verifyWebhook({ id: wh["webhook-id"], timestamp: wh["webhook-timestamp"], payload: d.raw, secret: "not-the-secret", signature: wh["webhook-signature"] }) === false,
+    );
+    assert(
+      "verifyWebhook rejects a stale timestamp (replay window)",
+      verifyWebhook({ id: wh["webhook-id"], timestamp: String(Number(wh["webhook-timestamp"]) - 3600), payload: d.raw, secret: SECRET, signature: wh["webhook-signature"], toleranceSec: 300 }) === false,
+    );
+    assert(
+      "verifyWebhook rejects a mismatched id (id is part of the signed content)",
+      verifyWebhook({ id: "00000000-0000-0000-0000-000000000000", timestamp: wh["webhook-timestamp"], payload: d.raw, secret: SECRET, signature: wh["webhook-signature"] }) === false,
+    );
   }
 
   clear();
