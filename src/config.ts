@@ -68,6 +68,23 @@ const httpToolDef = z
     message: "each http_tools entry needs a `path` (joined to base_url) or an absolute `url`",
   });
 
+// Rate limits + spend budgets for one level (global / server / tool). Counts (`per_*`) must be
+// positive integers; cost budgets (`cost_per_*`) may be fractional but positive. `.refine` rejects
+// an all-empty block so a typo'd field name can't silently disable the limit it was meant to set.
+const limitSpec = z
+  .object({
+    per_minute: z.number().int().positive().optional(),
+    per_hour: z.number().int().positive().optional(),
+    per_day: z.number().int().positive().optional(),
+    cost_per_minute: z.number().positive().optional(),
+    cost_per_hour: z.number().positive().optional(),
+    cost_per_day: z.number().positive().optional(),
+  })
+  .strict()
+  .refine((v) => Object.values(v).some((n) => typeof n === "number"), {
+    message: "a limits block must set at least one ceiling (per_minute/per_hour/per_day or cost_per_*)",
+  });
+
 const toolOverride = z
   .object({
     enabled: z.boolean().optional(),
@@ -79,6 +96,8 @@ const toolOverride = z
     redact_response: responseRedaction.optional(),
     tags: z.array(z.string()).optional(),
     important: z.boolean().optional(),
+    limits: limitSpec.optional(),
+    cost: z.number().nonnegative().optional(),
   })
   .strict();
 
@@ -111,6 +130,7 @@ const serverConfig = z
     env: z.record(z.string(), z.string()).optional(),
     tools: z.record(z.string(), toolOverride).optional(),
     approval: approval.optional(),
+    limits: limitSpec.optional(),
   })
   .strict();
 
@@ -278,6 +298,8 @@ const settings = z
     // Named switchable views over the configured servers/tools (visibility + optional scope cap).
     profiles: z.record(z.string(), profile).optional(),
     active_profile: z.string().optional(),
+    // Global rate limits + spend budgets applied to every tool call across all servers.
+    limits: limitSpec.optional(),
   })
   .strict()
   .refine((s) => !s.active_profile || (s.profiles !== undefined && s.active_profile in s.profiles), {

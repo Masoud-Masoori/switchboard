@@ -41,6 +41,7 @@ import {
 } from "./transforms.js";
 import { SB_ERR, SB_HINTS, type SbErrorCode } from "./errors.js";
 import { rankBm25, type RankDoc } from "./search-index.js";
+import { Governor } from "./governor.js";
 import { log } from "./logger.js";
 
 const SEP = "__";
@@ -82,11 +83,16 @@ interface ExposedTool {
 }
 
 export class Router {
+  /** Rate-limit + spend-budget enforcement, built once from the immutable config for this Router. */
+  private readonly governor: Governor;
+
   constructor(
     private readonly registry: Registry,
     private readonly cfg: SwitchboardConfig,
     private readonly resolveSecret: SecretResolver,
-  ) {}
+  ) {
+    this.governor = new Governor(cfg);
+  }
 
   /** Tool keys we've already warned about (shaping removed a required param with no injected
    *  value). Deduped for this Router's lifetime so a per-listTools call can't spam the log. */
@@ -413,6 +419,16 @@ export class Router {
     if (verdict.decision === "deny") {
       this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: verdict.reason, error_code: SB_ERR.POLICY_DENY });
       return this.error(`denied by policy: ${verdict.reason}`, SB_ERR.POLICY_DENY);
+    }
+
+    // Rate limits + spend budgets — charged BEFORE the approval gate so a throttled call never wakes
+    // a human, and conservatively (a denied call still counts) so a runaway loop is capped, not billed
+    // precisely. Fails closed: any exceeded ceiling (global/server/tool) stops the call here.
+    const gov = this.governor.consume(server.id, toolName, Date.now());
+    if (!gov.ok) {
+      this.record({ server: server.id, tool: toolName, scope: verdict.scope, decision: "deny", reason: gov.reason, error_code: SB_ERR.RATE_LIMITED });
+      const retry = gov.retryAfterMs && isFinite(gov.retryAfterMs) ? ` (retry after ~${Math.ceil(gov.retryAfterMs / 1000)}s)` : "";
+      return this.error(`rate limited: ${gov.reason}${retry}`, SB_ERR.RATE_LIMITED);
     }
 
     // Settle the approval gate before executing. A denied approval is the only path that

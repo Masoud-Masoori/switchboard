@@ -32,6 +32,33 @@ export interface ToolOverride {
   tags?: string[];
   /** Mark this tool important so it ranks higher in `find_tools` search. */
   important?: boolean;
+  /** Per-tool rate limits + spend budgets. Stacks with `server.limits` and `settings.limits` —
+   *  a call must pass all three. The tightest binding limit is reported when a call is denied. */
+  limits?: LimitSpec;
+  /** Abstract per-call cost charged against any `cost_per_*` budget at every level. Unitless —
+   *  use it to weight pricier tools (a council fan-out, a paid API) more heavily. Default 0. */
+  cost?: number;
+}
+
+/**
+ * Rate limits and spend budgets for one level (global / server / tool). Every field is an optional
+ * ceiling; only the windows you set are enforced. `per_*` cap call COUNT; `cost_per_*` cap the sum of
+ * each call's tool `cost`. Limits fail closed and stack across levels so a runaway agent loop or a
+ * pricey cross-provider council can't quietly drain your API budget.
+ */
+export interface LimitSpec {
+  /** Max calls per rolling minute. */
+  per_minute?: number;
+  /** Max calls per rolling hour. */
+  per_hour?: number;
+  /** Max calls per rolling day. */
+  per_day?: number;
+  /** Max summed tool `cost` per rolling minute. */
+  cost_per_minute?: number;
+  /** Max summed tool `cost` per rolling hour. */
+  cost_per_hour?: number;
+  /** Max summed tool `cost` per rolling day. */
+  cost_per_day?: number;
 }
 
 /** Schema-shaping rules applied to a tool's exposed input schema before agents see it. */
@@ -160,6 +187,9 @@ export interface ServerConfig {
   tools?: Record<string, ToolOverride>;
   /** Approval gates for this server. */
   approval?: ApprovalConfig;
+  /** Server-wide rate limits + spend budgets. Stacks under `settings.limits` and over each tool's
+   *  `limits` — a call must pass the tool, server, and global ceilings it touches. */
+  limits?: LimitSpec;
 }
 
 export interface GatewayConfig {
@@ -251,6 +281,13 @@ export interface SettingsConfig {
    * Omitted = no profile is active. The env var always wins over this.
    */
   active_profile?: string;
+  /**
+   * Global rate limits + spend budgets applied to EVERY tool call across all servers. The outermost
+   * of the three stacking levels (global > server > tool): a call must pass this ceiling plus any
+   * server- and tool-level limit it touches. Fail-closed; denied/failed calls still count. Use it as
+   * a blast-radius cap on a runaway agent loop or total cross-provider council spend.
+   */
+  limits?: LimitSpec;
 }
 
 /**

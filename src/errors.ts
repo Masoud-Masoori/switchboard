@@ -20,6 +20,8 @@ export const SB_ERR = {
   UPSTREAM_TIMEOUT: "SB_UPSTREAM_TIMEOUT",
   /** The request itself was malformed (bad/missing arguments). */
   BAD_REQUEST: "SB_BAD_REQUEST",
+  /** The call hit a configured rate limit or spend budget (global/server/tool). Fails closed. */
+  RATE_LIMITED: "SB_RATE_LIMITED",
 } as const;
 
 export type SbErrorCode = (typeof SB_ERR)[keyof typeof SB_ERR];
@@ -38,4 +40,6 @@ export const SB_HINTS: Record<SbErrorCode, string> = {
     "The upstream call exceeded settings.call_timeout_ms. Raise the timeout, or check whether the upstream server is reachable and responsive.",
   [SB_ERR.BAD_REQUEST]:
     "The request was malformed. Check the tool's input schema and that all required arguments are present.",
+  [SB_ERR.RATE_LIMITED]:
+    "This call hit a configured rate limit or spend budget (settings.limits / server.limits / tool.limits). Wait for the window to refill, raise the limit, or lower the tool's `cost`. Limits fail closed to cap runaway loops and API spend.",
 };
