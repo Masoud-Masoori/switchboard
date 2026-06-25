@@ -35,7 +35,8 @@ import { buildCouncilServer, COUNCIL_SERVER_ID } from "./council.js";
 import { log } from "./logger.js";
 
 const NAME = "switchboard";
-const VERSION = "0.1.0";
+/** Server version, surfaced over MCP `initialize` and the `/healthz` liveness probe. */
+export const VERSION = "0.1.0";
 
 export class Gateway {
   readonly vault: Vault;

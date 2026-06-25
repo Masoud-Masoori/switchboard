@@ -14,7 +14,9 @@ import { fileURLToPath } from "node:url";
 import express, { type Request, type Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Gateway } from "./gateway.js";
+import { VERSION } from "./gateway.js";
 import type { SwitchboardConfig, SettingsConfig, ServerConfig, CouncilConfig } from "./types.js";
+import type { BreakerHealth, BreakerState } from "./breaker.js";
 import { writeConfig, parseTriggersConfig } from "./config.js";
 import { recentAudit, usageStats } from "./audit.js";
 import { inferScope } from "./policy.js";
@@ -137,6 +139,79 @@ export function councilSummary(council?: CouncilConfig): CouncilSummary {
     max_rounds: council?.max_rounds ?? 3,
     token_budget: council?.token_budget ?? 2048,
     require_approval: Boolean(council?.require_approval),
+  };
+}
+
+/** One row of `/api/health`: a declared server folded together with its live mount + circuit state. */
+export interface ServerHealthRow {
+  id: string;
+  source: string;
+  enabled: boolean;
+  /** True iff the registry currently holds a live client for this id. */
+  mounted: boolean;
+  /** Tool count when mounted, 0 otherwise (never a stale/guessed number). */
+  tools: number;
+  /** Circuit-breaker state; "closed" when the breaker has never observed this server. */
+  circuit: BreakerState;
+  consecutiveFailures: number;
+  retryAfterMs: number;
+}
+
+/** The `/api/health` payload: a per-server roll-up plus a single ok/degraded verdict. */
+export interface HealthReport {
+  status: "ok" | "degraded";
+  servers: ServerHealthRow[];
+  summary: { total: number; mounted: number; enabled: number; circuits_open: number };
+}
+
+/**
+ * Fold the declared servers, the live mount map, and circuit-breaker health into one honest report.
+ * `configured` is the declared server surface (id/source/enabled). `mounted` maps a server id → its
+ * live tool count; PRESENCE in the map means the registry holds a client for it (the value is the
+ * tool count, used verbatim — never guessed). `circuits` is `Router.serverHealth()`; the breaker only
+ * tracks servers it has actually CALLED, so a freshly-mounted-but-never-called server is absent and
+ * defaults to a closed circuit. The verdict is "degraded" iff some ENABLED server failed to mount OR
+ * some circuit is open — a `half_open` probe and a deliberately-disabled (and therefore unmounted)
+ * server do NOT degrade. Breaker rows whose id is not in `configured` are ignored, so a stale/synthetic
+ * breaker entry can never fabricate a server row. Exported so the oracle can pin the verdict offline.
+ */
+export function buildHealthReport(
+  configured: { id: string; source: string; enabled: boolean }[],
+  mounted: Map<string, number>,
+  circuits: BreakerHealth[],
+): HealthReport {
+  const byId = new Map(circuits.map((c) => [c.server, c]));
+  let circuitsOpen = 0;
+  let degraded = false;
+  const servers: ServerHealthRow[] = configured.map((s) => {
+    const isMounted = mounted.has(s.id);
+    const c = byId.get(s.id);
+    const circuit: BreakerState = c?.state ?? "closed";
+    if (circuit === "open") {
+      circuitsOpen++;
+      degraded = true;
+    }
+    if (s.enabled && !isMounted) degraded = true;
+    return {
+      id: s.id,
+      source: s.source,
+      enabled: s.enabled,
+      mounted: isMounted,
+      tools: mounted.get(s.id) ?? 0,
+      circuit,
+      consecutiveFailures: c?.consecutiveFailures ?? 0,
+      retryAfterMs: c?.retryAfterMs ?? 0,
+    };
+  });
+  return {
+    status: degraded ? "degraded" : "ok",
+    servers,
+    summary: {
+      total: configured.length,
+      mounted: servers.filter((s) => s.mounted).length,
+      enabled: configured.filter((s) => s.enabled).length,
+      circuits_open: circuitsOpen,
+    },
   };
 }
 
@@ -297,6 +372,9 @@ export async function startDashboard(
 
   app.get("/api/state", (_req: Request, res: Response) => {
     const endpoint = `http://${cfg.gateway.http.host}:${cfg.gateway.http.port}/mcp`;
+    // Overlay live circuit-breaker state so the dashboard can badge a tripped upstream. The breaker
+    // only tracks servers it has called, so an unobserved server resolves to a closed circuit.
+    const circuits = new Map(gateway.router.serverHealth().map((c) => [c.server, c.state]));
     const servers = cfg.servers.map((s) => {
       const mounted = gateway.registry.get(s.id);
       const policy = s.policy ?? cfg.gateway.default_policy;
@@ -305,7 +383,15 @@ export async function startDashboard(
         enabled: s.tools?.[t.name]?.enabled !== false,
         scope: s.tools?.[t.name]?.policy ?? inferScope(t.name),
       }));
-      return { id: s.id, source: s.source, policy, enabled: s.enabled !== false, tools };
+      return {
+        id: s.id,
+        source: s.source,
+        policy,
+        enabled: s.enabled !== false,
+        mounted: Boolean(mounted),
+        circuit: circuits.get(s.id) ?? "closed",
+        tools,
+      };
     });
     // Profiles are named, switchable views (visibility + optional scope cap). The active one is
     // already folded into `cfg` at boot (env > file), so the dashboard reports the EFFECTIVE view.
@@ -336,6 +422,30 @@ export async function startDashboard(
   // --- Usage: aggregated tool-call metering, the local twin of Composio's Usage page ---
   app.get("/api/usage", (_req: Request, res: Response) => {
     res.json(usageStats());
+  });
+
+  // --- Liveness probe: a tiny, dependency-free 200 for uptime monitors / `docker healthcheck` /
+  // k8s readiness. Reveals only the service name + version + process uptime — no config, no server
+  // ids. Registered before the SPA catch-all so the exact path wins over the fallback handler. ---
+  app.get("/healthz", (_req: Request, res: Response) => {
+    res.json({ status: "ok", service: "switchboard", version: VERSION, uptime_s: Math.round(process.uptime()) });
+  });
+
+  // --- Readiness/health: per-server mount + circuit-breaker roll-up with one ok/degraded verdict.
+  // Read-only and unauthenticated like /api/state and /api/audit (the dashboard binds loopback by
+  // default); it exposes only server ids + circuit state, never secrets. This is the endpoint that
+  // wires the otherwise-dead Router.serverHealth() into an operator-visible surface. ---
+  app.get("/api/health", (_req: Request, res: Response) => {
+    const configured = cfg.servers.map((s) => ({ id: s.id, source: s.source, enabled: s.enabled !== false }));
+    const mounted = new Map<string, number>();
+    for (const s of cfg.servers) {
+      const m = gateway.registry.get(s.id);
+      if (m) mounted.set(s.id, m.tools.length);
+    }
+    const report = buildHealthReport(configured, mounted, gateway.router.serverHealth());
+    // 200 when ready, 503 when degraded — so a monitor polling /api/health gets an honest HTTP signal,
+    // not a green 200 hiding an unmounted/tripped upstream.
+    res.status(report.status === "ok" ? 200 : 503).json(report);
   });
 
   // ====================================================================
