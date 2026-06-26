@@ -1,0 +1,158 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 470" role="img"
+     aria-label="Switchboard — one governed MCP endpoint for every tool. Your assistants (Claude, ChatGPT, Cursor, agents) connect through one control plane (vault, policy, audit, gates) to your apps (Gmail, GitHub, Notion, Slack, your REST API).">
+  <defs>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2dd4bf"/>
+      <stop offset="1" stop-color="#d4a843"/>
+    </linearGradient>
+    <radialGradient id="glowTeal" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#2dd4bf" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#2dd4bf" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowGold" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#d4a843" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#d4a843" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#2dd4bf" fill-opacity="0.05"/>
+    </pattern>
+    <clipPath id="card">
+      <rect x="1" y="1" width="1278" height="468" rx="22"/>
+    </clipPath>
+    <!-- Reusable switchboard patch-bay mark -->
+    <g id="mark">
+      <rect width="32" height="32" rx="7" fill="#161b22" stroke="#2dd4bf" stroke-width="1.4"/>
+      <path d="M9 11h14M9 16h14M9 21h14" stroke="#2dd4bf" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="12" cy="11" r="2.4" fill="#0d1117" stroke="#2dd4bf" stroke-width="2"/>
+      <circle cx="20" cy="16" r="2.4" fill="#0d1117" stroke="#2dd4bf" stroke-width="2"/>
+      <circle cx="13" cy="21" r="2.4" fill="#0d1117" stroke="#2dd4bf" stroke-width="2"/>
+    </g>
+    <style>
+      .flow { filter: drop-shadow(0 0 3px #2dd4bf); }
+      @keyframes breathe { 0%,100% { opacity: 0.25 } 50% { opacity: 0.5 } }
+      .hubglow { animation: breathe 3.4s ease-in-out infinite; }
+    </style>
+  </defs>
+
+  <!-- Card + atmosphere -->
+  <g clip-path="url(#card)">
+    <rect x="1" y="1" width="1278" height="468" rx="22" fill="#0d1117"/>
+    <rect x="1" y="1" width="1278" height="468" fill="url(#grid)"/>
+    <ellipse cx="250" cy="120" rx="520" ry="320" fill="url(#glowTeal)"/>
+    <ellipse cx="1050" cy="420" rx="520" ry="320" fill="url(#glowGold)"/>
+    <rect x="1" y="1" width="1278" height="5" fill="url(#accent)"/>
+  </g>
+  <rect x="1" y="1" width="1278" height="468" rx="22" fill="none" stroke="#2a3340" stroke-width="1.5"/>
+
+  <!-- Title lockup -->
+  <g transform="translate(466,30)">
+    <use href="#mark" transform="scale(1.375)"/>
+    <text x="60" y="38" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+          font-size="46" font-weight="750" letter-spacing="-0.5" fill="#e6edf3">Switchboard</text>
+  </g>
+
+  <text x="640" y="100" text-anchor="middle"
+        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+        font-size="16.5" fill="#8b98a5">One governed endpoint for every MCP tool — shared by Claude, ChatGPT &amp; every agent.</text>
+
+  <text x="640" y="130" text-anchor="middle"
+        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+        font-size="12" font-weight="600" letter-spacing="2.4" fill="#5f6b78">LOCAL-FIRST&#160;&#160;·&#160;&#160;BRING YOUR OWN KEYS&#160;&#160;·&#160;&#160;ZERO TOKEN CUSTODY&#160;&#160;·&#160;&#160;RUNS FULLY OFFLINE</text>
+
+  <!-- Column captions -->
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+     font-size="11.5" font-weight="600" letter-spacing="2" fill="#6b7785" text-anchor="middle">
+    <text x="159" y="190">YOUR ASSISTANTS</text>
+    <text x="640" y="190">ONE CONTROL PLANE</text>
+    <text x="1000" y="190">YOUR APPS &amp; DATA</text>
+  </g>
+
+  <!-- Connectors (drawn under the nodes) -->
+  <g fill="none" stroke="#283140" stroke-width="1.6">
+    <path d="M234,230 C366,230 396,320 512,320"/>
+    <path d="M234,290 C366,290 396,320 512,320"/>
+    <path d="M234,350 C366,350 396,320 512,320"/>
+    <path d="M234,410 C366,410 396,320 512,320"/>
+    <path d="M768,320 C832,320 858,210 902,210"/>
+    <path d="M768,320 C832,320 858,265 902,265"/>
+    <path d="M768,320 C832,320 858,320 902,320"/>
+    <path d="M768,320 C832,320 858,375 902,375"/>
+    <path d="M768,320 C832,320 858,430 902,430"/>
+  </g>
+
+  <!-- Flowing data dots: clients -> hub -->
+  <g class="flow" fill="#2dd4bf">
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="0s"   path="M234,230 C366,230 396,320 512,320"/></circle>
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="0.6s" path="M234,290 C366,290 396,320 512,320"/></circle>
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="1.2s" path="M234,350 C366,350 396,320 512,320"/></circle>
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="1.8s" path="M234,410 C366,410 396,320 512,320"/></circle>
+  </g>
+  <!-- Flowing data dots: hub -> apps -->
+  <g class="flow" fill="#2dd4bf">
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="0.9s" path="M768,320 C832,320 858,210 902,210"/></circle>
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="1.5s" path="M768,320 C832,320 858,265 902,265"/></circle>
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="0.3s" path="M768,320 C832,320 858,320 902,320"/></circle>
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="2.1s" path="M768,320 C832,320 858,375 902,375"/></circle>
+    <circle r="2.8"><animateMotion dur="2.6s" repeatCount="indefinite" begin="1.5s" path="M768,320 C832,320 858,430 902,430"/></circle>
+  </g>
+
+  <!-- Client nodes -->
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+     font-size="14" font-weight="550" fill="#e6edf3" text-anchor="middle">
+    <g>
+      <rect x="84" y="210" width="150" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <circle cx="106" cy="230" r="3" fill="#2dd4bf"/><text x="166" y="235">Claude</text>
+    </g>
+    <g>
+      <rect x="84" y="270" width="150" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <circle cx="106" cy="290" r="3" fill="#2dd4bf"/><text x="166" y="295">ChatGPT</text>
+    </g>
+    <g>
+      <rect x="84" y="330" width="150" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <circle cx="106" cy="350" r="3" fill="#2dd4bf"/><text x="166" y="355">Cursor</text>
+    </g>
+    <g>
+      <rect x="84" y="390" width="150" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <circle cx="106" cy="410" r="3" fill="#2dd4bf"/><text x="168" y="415">Your agents</text>
+    </g>
+  </g>
+
+  <!-- Hub -->
+  <rect x="506" y="266" width="268" height="108" rx="20" fill="#2dd4bf" class="hubglow"/>
+  <rect x="512" y="272" width="256" height="96" rx="17" fill="#11171f" stroke="#2dd4bf" stroke-width="1.6"/>
+  <g transform="translate(546,300)"><use href="#mark" transform="scale(0.875)"/></g>
+  <text x="584" y="318" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+        font-size="17" font-weight="720" letter-spacing="0.5" fill="#e6edf3">SWITCHBOARD</text>
+  <text x="640" y="346" text-anchor="middle"
+        font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+        font-size="11.5" letter-spacing="0.6" fill="#1d8b7f">vault · policy · audit · gates</text>
+
+  <!-- App nodes with scope tags -->
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif" font-size="13.5">
+    <g>
+      <rect x="902" y="190" width="196" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <text x="920" y="215" fill="#e6edf3" font-weight="550">Gmail</text>
+      <text x="1082" y="215" text-anchor="end" fill="#2dd4bf" font-weight="600">read</text>
+    </g>
+    <g>
+      <rect x="902" y="245" width="196" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <text x="920" y="270" fill="#e6edf3" font-weight="550">GitHub</text>
+      <text x="1082" y="270" text-anchor="end" fill="#d4a843" font-weight="600">write</text>
+    </g>
+    <g>
+      <rect x="902" y="300" width="196" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <text x="920" y="325" fill="#e6edf3" font-weight="550">Notion</text>
+      <text x="1082" y="325" text-anchor="end" fill="#2dd4bf" font-weight="600">read</text>
+    </g>
+    <g>
+      <rect x="902" y="355" width="196" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <text x="920" y="380" fill="#e6edf3" font-weight="550">Slack</text>
+      <text x="1082" y="380" text-anchor="end" fill="#6b7785" font-weight="600">OFF</text>
+    </g>
+    <g>
+      <rect x="902" y="410" width="196" height="40" rx="20" fill="#161b22" stroke="#2a3340"/>
+      <text x="920" y="435" fill="#e6edf3" font-weight="550">Your REST API</text>
+      <text x="1082" y="435" text-anchor="end" fill="#8b98a5" font-weight="600">app2mcp</text>
+    </g>
+  </g>
+</svg>

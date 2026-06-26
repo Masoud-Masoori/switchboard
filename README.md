@@ -1,10 +1,13 @@
 <div align="center">
 
-# 🔌 Switchboard
+<img src="docs/assets/switchboard-banner.svg" alt="Switchboard — one governed MCP endpoint for every tool, shared by Claude and ChatGPT, running local-first on your machine" width="880" />
 
-**One connector. Every tool. Both Claude *and* ChatGPT — driving the same apps,
-through one governed control plane on your machine.**
-**Local-first. Bring your own keys. Run it fully offline with a local LLM. Nothing leaves your machine.**
+<h1>🔌&nbsp;Switchboard</h1>
+
+<p>
+  <b>One connector. Every tool. Both Claude <i>and</i> ChatGPT</b> — driving the same apps through one governed control plane on your machine.<br/>
+  Local-first · bring your own keys · run fully offline with a local LLM · <b>nothing leaves your machine</b>.
+</p>
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-2dd4bf.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-1.29-2dd4bf.svg)](https://modelcontextprotocol.io)
@@ -12,6 +15,15 @@ through one governed control plane on your machine.**
 [![Verified](https://img.shields.io/badge/deterministic_oracles-1153_checks-2dd4bf.svg)](#everything-is-verified-by-a-deterministic-oracle)
 [![Status](https://img.shields.io/badge/status-working_alpha-D4A843.svg)](#project-status)
 [![Zero native deps](https://img.shields.io/badge/native_deps-0-D4A843.svg)](#security)
+
+<p>
+  <a href="#quickstart"><b>Quickstart</b></a> ·
+  <a href="#why-its-different">Why it's different</a> ·
+  <a href="#the-big-idea">The big idea</a> ·
+  <a href="#cli">CLI</a> ·
+  <a href="#everything-is-verified-by-a-deterministic-oracle">Verified</a> ·
+  <a href="#docs">Docs</a>
+</p>
 
 </div>
 
