@@ -55,6 +55,7 @@ import {
   pickDefaultModel,
   buildLocalProvider,
   withLocalProvider,
+  wireAdvice,
   installGuide,
 } from "./localllm.js";
 import { log, out } from "./logger.js";
@@ -453,22 +454,22 @@ llmCmd
       }
 
       const provider = buildLocalProvider(baseUrl, model);
-      const { config, changed, enabled, note } = withLocalProvider(cfg, provider);
+      const result = withLocalProvider(cfg, provider);
+      const advice = wireAdvice(result, model);
 
       if (opts.print) {
         out("\n# settings.council.providers.local\n");
         out(JSON.stringify(provider, null, 2));
-        if (note) out(`\nnote: ${note}`);
+        for (const line of advice) out(`\nnote: ${line}`);
         return;
       }
-      if (!changed) {
+      if (!result.changed) {
         log.ok(`council already wired to ${baseUrl} (${model}) — no change`);
       } else {
-        writeConfig(cfgPath, config);
+        writeConfig(cfgPath, result.config);
         log.ok(`wired local council provider → ${baseUrl} (model: ${model})`);
       }
-      if (note) out(`  → ${note}`);
-      else if (enabled) out("  → council is enabled; run `switchboard serve`, then call `council_consult` / `council_debate`.");
+      for (const line of advice) out(`  → ${line}`);
     },
   );
 

@@ -20,8 +20,10 @@ import {
   parseOpenAiModels,
   parseOllamaTags,
   pickDefaultModel,
+  classifyModel,
   buildLocalProvider,
   withLocalProvider,
+  wireAdvice,
   installGuide,
 } from "../dist/localllm.js";
 import { starterConfig, writeConfig, loadConfig } from "../dist/config.js";
@@ -150,6 +152,81 @@ try {
     assert("roundtrip: local provider survives load", eq(reloaded.settings.council.providers.local, prov));
     assert("roundtrip: council enabled survives load", reloaded.settings.council.enabled === true);
     assert("roundtrip: starter server preserved", reloaded.servers.length === 1 && reloaded.servers[0].id === "everything");
+  }
+
+  // ---- classifyModel: chat vs non-chat name heuristics -------------------
+  for (const m of ["llama3.1:8b", "qwen2.5:7b-instruct", "mistral-nemo", "gpt-oss:20b", "deepseek-r1:7b", "gemma2"]) {
+    assert(`classify: '${m}' → chat`, classifyModel(m) === "chat");
+  }
+  assert("classify: nomic-embed-text → embedding", classifyModel("nomic-embed-text") === "embedding");
+  assert("classify: mxbai-embed-large → embedding", classifyModel("mxbai-embed-large") === "embedding");
+  assert("classify: bge-large → embedding", classifyModel("bge-large-en") === "embedding");
+  assert("classify: snowflake-arctic-embed → embedding", classifyModel("snowflake-arctic-embed") === "embedding");
+  assert("classify: bge-reranker → rerank", classifyModel("bge-reranker-v2-m3") === "rerank");
+  assert("classify: whisper → speech", classifyModel("whisper-large-v3") === "speech");
+  assert("classify: sdxl → image", classifyModel("sdxl-turbo") === "image");
+  assert("classify: case-insensitive (NOMIC-EMBED)", classifyModel("NOMIC-EMBED-TEXT") === "embedding");
+
+  // ---- pickDefaultModel: chat-aware fallback (the embedding footgun) ------
+  // preferred family still wins even when an embedding model sorts first
+  assert("pick: preferred beats leading embedding", pickDefaultModel(["nomic-embed-text", "mistral-7b"]) === "mistral-7b");
+  // no preferred family: SKIP the embedding model and take the chat-looking one
+  assert("pick: skips embedding when a chat model exists", pickDefaultModel(["nomic-embed-text", "my-custom-chat:latest"]) === "my-custom-chat:latest");
+  assert("pick: skips reranker for chat", pickDefaultModel(["bge-reranker-v2", "some-instruct"]) === "some-instruct");
+  // only a non-chat model loaded: fall back to it (caller warns) rather than returning undefined
+  assert("pick: embedding-only falls back to it", pickDefaultModel(["nomic-embed-text"]) === "nomic-embed-text");
+  // regression: the pre-existing 'first when no preferred' contract is unchanged (neither is non-chat)
+  assert("pick: first-when-no-preferred unchanged", pickDefaultModel(["foo-1", "bar-2"]) === "foo-1");
+
+  // ---- wireAdvice: centralized, model-aware after-wire guidance ----------
+  {
+    // enabled council, chat model, only the local provider → enabled-line + single-voice hint
+    const r = withLocalProvider(baseCfg(undefined), prov);
+    const adv = wireAdvice(r, "llama3.1");
+    assert("advice(enabled,solo): 2 lines", adv.length === 2, `${adv.length}`);
+    assert("advice(enabled,solo): announces enabled", adv[0].includes("council is enabled"));
+    assert("advice(enabled,solo): single-voice hint", adv[1].includes("council_debate") && adv[1].includes("two providers"));
+    assert("advice(enabled,solo): no warning prefix", !adv[0].toLowerCase().includes("looks like"));
+  }
+  {
+    // enabled council with a sibling cloud provider → no single-voice hint
+    const cfg = baseCfg({ council: { enabled: true, providers: { anthropic: { api_key_ref: "${vault:anthropic}", default_model: "claude" } } } });
+    const r = withLocalProvider(cfg, prov);
+    const adv = wireAdvice(r, "llama3.1");
+    assert("advice(enabled,two): 1 line", adv.length === 1, `${adv.length}`);
+    assert("advice(enabled,two): enabled line", adv[0].includes("council is enabled"));
+    assert("advice(enabled,two): no single-voice hint", !adv.some((l) => l.includes("two providers")));
+  }
+  {
+    // council explicitly disabled → surface only the disabled note
+    const r = withLocalProvider(baseCfg({ council: { enabled: false } }), prov);
+    const adv = wireAdvice(r, "llama3.1");
+    assert("advice(disabled): 1 line", adv.length === 1, `${adv.length}`);
+    assert("advice(disabled): names enabled flag", adv[0].includes("enabled"));
+    assert("advice(disabled): not the run hint", !adv[0].includes("switchboard serve"));
+  }
+  {
+    // embedding model wired → correctness WARNING first, then the normal lines
+    const r = withLocalProvider(baseCfg(undefined), buildLocalProvider("http://127.0.0.1:11434/v1", "nomic-embed-text"));
+    const adv = wireAdvice(r, "nomic-embed-text");
+    assert("advice(embed): warning + enabled + hint = 3 lines", adv.length === 3, `${adv.length}`);
+    assert("advice(embed): warning is first", adv[0].includes("nomic-embed-text") && adv[0].includes("embedding"));
+    assert("advice(embed): warning uses 'an'", adv[0].includes("an embedding"));
+    assert("advice(embed): warning steers to chat", adv[0].includes("chat/instruct"));
+    assert("advice(embed): still shows enabled line", adv[1].includes("council is enabled"));
+  }
+  {
+    // speech model → 'a speech' article (proves the article branch)
+    const r = withLocalProvider(baseCfg(undefined), buildLocalProvider("http://127.0.0.1:11434/v1", "whisper-large-v3"));
+    const adv = wireAdvice(r, "whisper-large-v3");
+    assert("advice(speech): 'a speech' article", adv[0].includes("a speech model"));
+  }
+  {
+    // purity: wireAdvice must not mutate the WireResult it is handed
+    const r = withLocalProvider(baseCfg(undefined), prov);
+    const snapshot = JSON.stringify(r);
+    wireAdvice(r, "llama3.1");
+    assert("advice: does not mutate the result", JSON.stringify(r) === snapshot);
   }
 } finally {
   rmSync(root, { recursive: true, force: true });

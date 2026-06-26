@@ -64,14 +64,44 @@ export function parseOllamaTags(body: unknown): string[] {
 /** Capable general-chat models, best first — used to pick a default when the user doesn't name one. */
 export const PREFERRED_MODELS = ["llama3.1", "llama3", "qwen2.5", "qwen", "mistral", "phi", "gemma"];
 
-/** Pick a default model: the first that matches a preferred family, else the first available. */
+/** A model that can't drive a chat-based council relay. Used to warn instead of silently wiring junk. */
+export type NonChatKind = "embedding" | "rerank" | "speech" | "image";
+
+/**
+ * Name fragments that mark a local model as NOT a general chat/instruct model. Heuristic,
+ * case-insensitive, FIRST MATCH WINS — so the more-specific `rerank` is checked before
+ * `embedding` (a `bge-reranker` model also contains the `bge-` embedding hint).
+ */
+const NON_CHAT_FAMILIES: { kind: NonChatKind; hints: string[] }[] = [
+  { kind: "rerank", hints: ["rerank"] },
+  { kind: "embedding", hints: ["embed", "nomic-embed", "mxbai", "bge-", "gte-", "e5-", "all-minilm", "arctic-embed"] },
+  { kind: "speech", hints: ["whisper", "parakeet", "piper", "-tts", "tts-", "bark"] },
+  { kind: "image", hints: ["stable-diffusion", "sdxl", "flux.1", "flux-", "playground-v2"] },
+];
+
+/**
+ * Classify a model id as a usable chat model or a specific non-chat kind (embedding/rerank/speech/image).
+ * Heuristic by name only — a box with just `nomic-embed-text` loaded shouldn't be wired as the council
+ * voice. Returns "chat" when nothing matches (treat as usable), so it never blocks an unknown model.
+ */
+export function classifyModel(model: string): NonChatKind | "chat" {
+  const m = model.toLowerCase();
+  for (const fam of NON_CHAT_FAMILIES) if (fam.hints.some((h) => m.includes(h))) return fam.kind;
+  return "chat";
+}
+
+/**
+ * Pick a default model: the first that matches a preferred family; else the first model that at least
+ * looks like a chat model (skipping embedding/rerank/speech/image); else the first available.
+ */
 export function pickDefaultModel(models: string[], prefer: string[] = PREFERRED_MODELS): string | undefined {
   if (models.length === 0) return undefined;
   for (const p of prefer) {
     const hit = models.find((m) => m.toLowerCase().includes(p));
     if (hit) return hit;
   }
-  return models[0];
+  const chat = models.find((m) => classifyModel(m) === "chat");
+  return chat ?? models[0];
 }
 
 /** Build the council `local` provider block. No api_key_ref — local servers are keyless by default. */
@@ -110,6 +140,38 @@ export function withLocalProvider(cfg: SwitchboardConfig, provider: LocalProvide
     ? undefined
     : "settings.council.enabled is false — set it to true to mount the council tools.";
   return { config: next, changed, enabled, note };
+}
+
+/**
+ * Post-wire next-step advice as plain lines (no styling), derived only from the WireResult and the
+ * chosen model so the CLI's after-wire guidance is centralized and testable. In order:
+ *   1. a correctness WARNING when the wired model doesn't look like a chat model (embedding/rerank/…);
+ *   2. the council-disabled note, or the enabled → next-step line;
+ *   3. a single-voice hint when `local` is the only provider (`council_debate` needs ≥2 to compare).
+ */
+export function wireAdvice(result: WireResult, model: string): string[] {
+  const lines: string[] = [];
+  const kind = classifyModel(model);
+  if (kind !== "chat") {
+    const article = kind === "embedding" ? "an" : "a";
+    lines.push(
+      `'${model}' looks like ${article} ${kind} model, not a chat model — the council needs a chat/instruct model. ` +
+        "Load one (e.g. `ollama pull llama3.1`) and re-run with `--model <chat-model>`.",
+    );
+  }
+  if (!result.enabled) {
+    lines.push(result.note ?? "settings.council.enabled is false — set it to true to mount the council tools.");
+  } else {
+    lines.push("council is enabled; run `switchboard serve`, then call `council_consult` / `council_debate`.");
+    const providers = result.config.settings?.council?.providers ?? {};
+    if (Object.keys(providers).length === 1) {
+      lines.push(
+        "only the local provider is wired — `council_debate` needs two providers to compare. " +
+          "Add a cloud key (e.g. `council.providers.anthropic.api_key_ref`) for a real cross-model debate.",
+      );
+    }
+  }
+  return lines;
 }
 
 /** Exact, copy-paste setup steps. PRINTED ONLY — Switchboard never runs these for you. */
