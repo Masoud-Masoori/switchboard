@@ -49,7 +49,7 @@ Free, no per-call meter.
 **9/**
 Honest engineering: pure-TypeScript/Node ESM, exactly 5 runtime deps, ZERO native deps.
 
-Every feature is pinned by deterministic verification oracles — ~1,150 automated checks, code checking code, no model tokens.
+Every feature is pinned by deterministic verification oracles — 1,171 automated checks, code checking code, no model tokens.
 
 Positioning: the self-hosted, governed alternative to hosted tool routers.
 

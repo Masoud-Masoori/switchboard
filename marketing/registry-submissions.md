@@ -29,26 +29,31 @@ PR steps:
 
 ## Official MCP registry (registry.modelcontextprotocol.io)
 
-Goal: publish a `server.json` describing MCP Switchboard as an npm-distributed MCP server so it appears in the official registry (which also feeds the catalog MCP Switchboard itself ingests).
+Goal: publish the committed `server.json` describing MCP Switchboard as an npm-distributed MCP server so it appears in the official registry (which also feeds the catalog MCP Switchboard itself ingests). The npm ownership marker is already present in `package.json` as `mcpName`.
 
 `server.json` metadata fields to fill:
 
 ```json
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Mas-AI-Official/mcp-switchboard",
-  "description": "Local-first, governed MCP aggregator: re-expose all your MCP servers behind one endpoint with a local AES-256-GCM vault, per-tool read/write/full policy, fail-closed approval gates, and an append-only audit log — usable by both Claude and ChatGPT.",
+  "title": "MCP Switchboard",
+  "description": "Local-first governed MCP aggregator with vault, policy gates, audit log, and dashboard.",
   "repository": {
     "url": "https://github.com/Mas-AI-Official/mcp-switchboard",
     "source": "github"
   },
-  "version": "<your-published-npm-version>",
+  "websiteUrl": "https://github.com/Mas-AI-Official/mcp-switchboard#readme",
+  "version": "0.1.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "mcp-switchboard",
-      "version": "<your-published-npm-version>",
-      "transport": { "type": "stdio" }
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "packageArguments": [
+        { "type": "positional", "value": "serve" }
+      ]
     }
   ]
 }
@@ -57,14 +62,15 @@ Goal: publish a `server.json` describing MCP Switchboard as an npm-distributed M
 Notes on the fields:
 - `name` must be a namespaced reverse-DNS identifier you own. The GitHub namespace (`io.github.<owner>/<server>`) is authenticated via the GitHub login in the publisher CLI, so `io.github.Mas-AI-Official/mcp-switchboard` is the natural choice.
 - `identifier` in `packages` is the **npm package name `mcp-switchboard`** (not the `switchboard` CLI alias).
-- `version` must match the actual published npm version of `mcp-switchboard` — read it from the package (or `npm view mcp-switchboard version`) and fill both `version` fields with that exact string; bump it on each release. Do not hardcode a guessed version.
-- The registry validates that the npm package actually exists and (depending on current rules) that it carries an `mcp-name` marker tying it back to the `name` above — confirm the exact validation requirement when you publish.
+- `version` must match the actual published npm version of `mcp-switchboard` in both places; `npm run verify:registry` enforces this before release.
+- `packageArguments: [{ "type": "positional", "value": "serve" }]` is intentional: invoking the CLI with no subcommand prints help, while the MCP Registry stdio package should run the gateway.
+- The registry validates that the npm package exists and carries the `mcpName` marker tying it back to the `server.json` `name`; `package.json` already includes `"mcpName": "io.github.Mas-AI-Official/mcp-switchboard"`.
 
 Publishing steps with the `mcp-publisher` CLI:
 1. Install the publisher CLI (`mcp-publisher`). Confirm the current install method and command name at https://github.com/modelcontextprotocol/registry (the registry repo documents the canonical install + flow).
-2. From the repo root: `mcp-publisher init` to scaffold a `server.json`, then edit it to match the fields above.
+2. From the repo root: use the committed `server.json`; run `npm run verify:registry` before publishing. If `mcp-publisher init` rewrites the file, diff it before accepting the generated changes.
 3. Authenticate: `mcp-publisher login github` (GitHub OAuth — this is what authorizes the `io.github.Mas-AI-Official/*` namespace).
-4. Ensure `mcp-switchboard` is already published to npm and, if the registry requires it, that the package metadata includes the `mcp-name` linkage to your `server.json` `name`.
+4. Ensure `mcp-switchboard` is already published to npm and that the package metadata includes the `mcpName` linkage to your `server.json` `name`.
 5. Publish: `mcp-publisher publish`.
 6. Verify the listing resolves on registry.modelcontextprotocol.io.
 
@@ -152,7 +158,7 @@ switchboard init && switchboard serve   # or npx mcp-switchboard serve
 > A few things I'm happy with:
 > • Browse 4,700+ toolkits in an embedded dashboard, flip one on, and `switchboard install <client>` wires Claude Desktop / Claude Code / Cursor / VS Code / Codex in **one command**.
 > • It runs **fully offline** — the cross-provider council can run against an auto-detected local LLM with no account and no API key.
-> • Pure TypeScript/Node, exactly 5 runtime dependencies, zero native dependencies, and every feature is backed by deterministic verification oracles (~1,150 automated checks).
+> • Pure TypeScript/Node, exactly 5 runtime dependencies, zero native dependencies, and every feature is backed by deterministic verification oracles (1,171 automated checks).
 >
 > Positioning honestly: hosted tool routers like Composio and Pipedream are great SaaS, but they custody your tokens and meter your calls. MCP Switchboard is the **self-hosted, governed alternative** — free, Apache-2.0, keys and governance and audit all on your machine.
 >
@@ -183,4 +189,4 @@ Ordered by star-leverage, highest first.
 | mcpservers.org | https://mcpservers.org/ | Low | Medium | Paste the mcpservers.org blurb. Verify submission method (often a GitHub PR). |
 | X (Twitter) | https://x.com/ | Low | Medium | Thread version of the LinkedIn post; lead with N×M→N×1 and "both Claude and ChatGPT." Truthful, benefit-led, link the repo. |
 | GitHub topic tags `mcp` / `model-context-protocol` | https://github.com/Mas-AI-Official/mcp-switchboard (repo ▸ About ▸ topics) | Trivial | Medium | Add `mcp`, `model-context-protocol`, plus `mcp-server`, `aggregator`, `gateway`, `self-hosted`, `governance`. Passive discovery via topic browsing; do this first since it's near-zero effort. |
-| dev.to / Hashnode cross-post | https://dev.to/ · https://hashnode.com/ | Medium | Low-Medium | Cross-post a deeper write-up (the N×M problem, the governance/vault design, the ~1,150-check oracle approach). Canonical-link back to the repo/README. Long-tail SEO, slower burn. |
+| dev.to / Hashnode cross-post | https://dev.to/ · https://hashnode.com/ | Medium | Low-Medium | Cross-post a deeper write-up (the N×M problem, the governance/vault design, the 1,171-check oracle approach). Canonical-link back to the repo/README. Long-tail SEO, slower burn. |

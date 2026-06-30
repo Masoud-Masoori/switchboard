@@ -1,0 +1,28 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Mas-AI-Official/mcp-switchboard",
+  "title": "MCP Switchboard",
+  "description": "Local-first governed MCP aggregator with vault, policy gates, audit log, and dashboard.",
+  "repository": {
+    "url": "https://github.com/Mas-AI-Official/mcp-switchboard",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/Mas-AI-Official/mcp-switchboard#readme",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "mcp-switchboard",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "serve"
+        }
+      ]
+    }
+  ]
+}

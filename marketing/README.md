@@ -22,7 +22,8 @@ Status everywhere is **working alpha** (zero stars, zero known production users 
 | [x-thread.md](x-thread.md) | X / Threads / Bluesky | 10-tweet launch thread (N×M→N×1, both Claude + ChatGPT) |
 | [blog-launch.md](blog-launch.md) | dev.to / Hashnode / blog | Long-form launch write-up (problem, design, oracle approach) |
 | [registry-submissions.md](registry-submissions.md) | Registries + directories | **Highest star-leverage.** awesome-mcp-servers PR line, official MCP registry `server.json` + `mcp-publisher` steps, mcp.so / glama.ai / pulsemcp / mcpservers.org blurbs, LinkedIn post, prioritized submission checklist |
-| [video/switchboard-launch-video.md](video/switchboard-launch-video.md) | Short-form video | 9:16 ~50s storyboard, grounded VO (TTS-safe), SRT cues, thumbnail, per-platform distribution captions |
+| [video/switchboard-launch-video.md](video/switchboard-launch-video.md) | Short-form video | 9:16 ContentOps render staged for approval, plus grounded storyboard, VO, SRT cues, thumbnail, and platform captions |
+| [launch-readiness.md](launch-readiness.md) | Release gate | Verified checks, caveats, and approval-gated launch sequence |
 
 ## Suggested launch order (highest leverage first)
 
@@ -34,7 +35,7 @@ Status everywhere is **working alpha** (zero stars, zero known production users 
 6. **X thread + LinkedIn post** — same day as Show HN.
 7. **Product Hunt** — broader, less-technical wave; prepare gallery.
 8. **Directory blurbs** (mcp.so, glama.ai, pulsemcp, mcpservers.org) — paste-ready in registry-submissions.md.
-9. **Video** — render from the storyboard, then queue distribution (gated for operator approval).
+9. **Video** — review the queued ContentOps render, approve it if acceptable, then distribute through the gated publisher.
 
 ## Honesty guardrails (apply to every post)
 

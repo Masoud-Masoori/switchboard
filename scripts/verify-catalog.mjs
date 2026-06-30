@@ -149,6 +149,24 @@ const snap = {
   }
 }
 
+// --- 8. shipped mount URLs are concrete and parseable ----------------------------------------------
+{
+  const shipped = loadCatalog();
+  const bad = [];
+  for (const tk of shipped.toolkits) {
+    const mount = tk.mount || {};
+    const url = mount.url || mount.openapi;
+    if (!url) continue;
+    try {
+      const u = new URL(url);
+      if (!["http:", "https:"].includes(u.protocol) || /[{}]/.test(url)) bad.push(`${tk.slug} -> ${url}`);
+    } catch {
+      bad.push(`${tk.slug} -> ${url}`);
+    }
+  }
+  assert("shipped catalog has no invalid or templated mount URLs", bad.length === 0, bad.slice(0, 3).join("; "));
+}
+
 const failed = checks.filter((c) => !c.ok);
 console.log(`\n${checks.length - failed.length}/${checks.length} checks passed`);
 process.exitCode = failed.length === 0 ? 0 : 1;

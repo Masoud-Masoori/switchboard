@@ -99,6 +99,17 @@ function oneLine(text: string | undefined | null, cap = 240): string {
   return flat.length > cap ? flat.slice(0, cap - 1).trimEnd() + "…" : flat;
 }
 
+/** A URL we can actually mount without asking the operator to substitute placeholders. */
+function isConcreteHttpUrl(value: string): boolean {
+  if (/[{}]/.test(value)) return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 /** Derive a coarse category for an MCP server from keywords in its name/description. */
 function deriveMcpCategory(name: string, description: string): string {
   const h = `${name} ${description}`.toLowerCase();
@@ -170,7 +181,9 @@ function toolkitFromRegistry(srv: RegistryServer): Toolkit | null {
   let mount: ToolkitMount | null = null;
   const remote = (srv.remotes ?? []).find((r) => r.url);
   if (remote?.url) {
-    mount = { source: "remote", url: remote.url, transport: remote.type || "streamable-http" };
+    mount = isConcreteHttpUrl(remote.url)
+      ? { source: "remote", url: remote.url, transport: remote.type || "streamable-http" }
+      : { source: "manual", note: `Configure the remote MCP endpoint manually: ${remote.url}` };
   } else {
     const npm = (srv.packages ?? []).find((p) => p.registryType === "npm" && p.identifier);
     if (npm?.identifier) {

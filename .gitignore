@@ -1,6 +1,7 @@
 # --- dependencies & build output ---
 node_modules/
 dist/
+coverage/
 *.tsbuildinfo
 
 # --- secrets & local state (NEVER commit these) ---
@@ -22,6 +23,13 @@ audit.log
 Thumbs.db
 *.log
 npm-debug.log*
+
+# --- generated QA / release reports ---
+report.*
+*.report.json
+*.report.html
+qa-report.*
+launch-report.*
 
 # Keep the committed examples (these are templates, not real config):
 !switchboard.config.example.yaml

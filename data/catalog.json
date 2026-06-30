@@ -1002,9 +1002,8 @@
       "repository": "https://github.com/achriom/achriom-mcp",
       "homepage": "https://github.com/achriom/achriom-mcp",
       "mount": {
-        "source": "remote",
-        "url": "https://mcp.achriom.com/mcp?api_key={api_key}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mcp.achriom.com/mcp?api_key={api_key}"
       }
     },
     {
@@ -1449,9 +1448,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_AdminTools",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_AdminTools"
       }
     },
     {
@@ -6471,9 +6469,8 @@
       "repository": "https://github.com/pangolinfo/pangolinfo-mcp",
       "homepage": "https://github.com/pangolinfo/pangolinfo-mcp",
       "mount": {
-        "source": "remote",
-        "url": "https://mcp.pangolinfo.com/mcp?api_key={api_key}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mcp.pangolinfo.com/mcp?api_key={api_key}"
       }
     },
     {
@@ -11498,9 +11495,8 @@
       "repository": "https://github.com/AutoRFP/mcp",
       "homepage": "https://github.com/AutoRFP/mcp",
       "mount": {
-        "source": "remote",
-        "url": "https://{api_host}/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://{api_host}/mcp"
       }
     },
     {
@@ -18073,9 +18069,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://{instance}.brightsec.com/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://{instance}.brightsec.com/mcp"
       }
     },
     {
@@ -19392,9 +19387,8 @@
       "repository": "https://github.com/cardog-ai/mcp-server",
       "homepage": "https://github.com/cardog-ai/mcp-server",
       "mount": {
-        "source": "remote",
-        "url": "https://mcp.cardog.io/mcp?api_key={api_key}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mcp.cardog.io/mcp?api_key={api_key}"
       }
     },
     {
@@ -22346,9 +22340,8 @@
       "repository": "https://github.com/mkc909/cloudclaw-core",
       "homepage": "https://github.com/mkc909/cloudclaw-core",
       "mount": {
-        "source": "remote",
-        "url": "https://mycloudclaw.com/api/agents/{agent_id}/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mycloudclaw.com/api/agents/{agent_id}/mcp"
       }
     },
     {
@@ -22794,9 +22787,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://{tenant}.cognethics.com/api/mcp/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://{tenant}.cognethics.com/api/mcp/mcp"
       }
     },
     {
@@ -31866,9 +31858,8 @@
       "repository": "https://github.com/sravanism/esrp-oss-mcp-server",
       "homepage": "https://github.com/sravanism/esrp-oss-mcp-server",
       "mount": {
-        "source": "remote",
-        "url": "https://esrp-mcp-server-{env}.azurewebsites.net/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://esrp-mcp-server-{env}.azurewebsites.net/mcp"
       }
     },
     {
@@ -31889,9 +31880,8 @@
       "repository": "https://github.com/sravanism/esrp-oss-mcp-server",
       "homepage": "https://github.com/sravanism/esrp-oss-mcp-server",
       "mount": {
-        "source": "remote",
-        "url": "https://esrp-mcp-server-test-{env}.azurewebsites.net/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://esrp-mcp-server-test-{env}.azurewebsites.net/mcp"
       }
     },
     {
@@ -37465,9 +37455,8 @@
       "repository": "https://github.com/gleanwork/remote-mcp-server",
       "homepage": "https://github.com/gleanwork/remote-mcp-server",
       "mount": {
-        "source": "remote",
-        "url": "https://{baseUrl}/mcp/{server-name}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://{baseUrl}/mcp/{server-name}"
       }
     },
     {
@@ -39958,9 +39947,8 @@
       "repository": "https://github.com/larebelion/hapimcp",
       "homepage": "https://github.com/larebelion/hapimcp",
       "mount": {
-        "source": "remote",
-        "url": "https://{HAPI_FQDN}:{HAPI_PORT}/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://{HAPI_FQDN}:{HAPI_PORT}/mcp"
       }
     },
     {
@@ -42708,9 +42696,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://s4mcp-prod.azurewebsites.net/{tenantId}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://s4mcp-prod.azurewebsites.net/{tenantId}"
       }
     },
     {
@@ -43730,9 +43717,8 @@
       "repository": "https://github.com/meruada/iox-cloud",
       "homepage": "https://github.com/meruada/iox-cloud",
       "mount": {
-        "source": "remote",
-        "url": "https://iox-dispatch.matt-merutech.workers.dev/mcp?worker={project_slug}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://iox-dispatch.matt-merutech.workers.dev/mcp?worker={project_slug}"
       }
     },
     {
@@ -47486,9 +47472,8 @@
       "repository": "https://github.com/billmacuk/LiftMCP",
       "homepage": "https://github.com/billmacuk/LiftMCP",
       "mount": {
-        "source": "remote",
-        "url": "https://{property_slug}.mcp-dev.liftmcp.com/",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://{property_slug}.mcp-dev.liftmcp.com/"
       }
     },
     {
@@ -49295,9 +49280,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://mainline.dev/mcp/{team_id}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mainline.dev/mcp/{team_id}"
       }
     },
     {
@@ -51301,9 +51285,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://mcp.geekflare.com/{API_KEY}/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mcp.geekflare.com/{API_KEY}/mcp"
       }
     },
     {
@@ -61037,9 +61020,8 @@
       "repository": "https://github.com/chaosmibu-blip/OctoDock",
       "homepage": "https://github.com/chaosmibu-blip/OctoDock",
       "mount": {
-        "source": "remote",
-        "url": "https://octo-dock.com/mcp/{apiKey}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://octo-dock.com/mcp/{apiKey}"
       }
     },
     {
@@ -61151,9 +61133,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_ODSPRemoteServer",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_ODSPRemoteServer"
       }
     },
     {
@@ -62922,9 +62903,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://mcp.{region}.ovhcloud.com/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mcp.{region}.ovhcloud.com/mcp"
       }
     },
     {
@@ -64726,9 +64706,8 @@
       "repository": "https://github.com/Pingfyr/mcp",
       "homepage": "https://github.com/Pingfyr/mcp",
       "mount": {
-        "source": "remote",
-        "url": "https://mcp.pingfyr.com/mcp?apiKey={apiKey}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mcp.pingfyr.com/mcp?apiKey={apiKey}"
       }
     },
     {
@@ -67597,9 +67576,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://mcp-api-ai.qovery.com/mcp?token={qovery_token}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mcp-api-ai.qovery.com/mcp?token={qovery_token}"
       }
     },
     {
@@ -68192,9 +68170,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://mcp.rallyprop.ai?key={api_key}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://mcp.rallyprop.ai?key={api_key}"
       }
     },
     {
@@ -69995,9 +69972,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://api.repowise.dev/mcp/{owner}/{repo}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://api.repowise.dev/mcp/{owner}/{repo}"
       }
     },
     {
@@ -74407,9 +74383,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_SharePointListsTools",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_SharePointListsTools"
       }
     },
     {
@@ -79343,9 +79318,8 @@
       "repository": "https://github.com/Stratalize/Stratalize",
       "homepage": "https://github.com/Stratalize/Stratalize",
       "mount": {
-        "source": "remote",
-        "url": "https://www.stratalize.com/api/stealth/{server_name}",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://www.stratalize.com/api/stealth/{server_name}"
       }
     },
     {
@@ -82120,9 +82094,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://tz-{region}.somdewan.com/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://tz-{region}.somdewan.com/mcp"
       }
     },
     {
@@ -82138,9 +82111,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://{instance}.timillcloud.com/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://{instance}.timillcloud.com/mcp"
       }
     },
     {
@@ -87152,9 +87124,8 @@
       "origin": "mcp-registry",
       "source_license": "MIT (MCP Registry data)",
       "mount": {
-        "source": "remote",
-        "url": "https://{tenant_name}.verityrms.com/mcp",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://{tenant_name}.verityrms.com/mcp"
       }
     },
     {
@@ -89118,9 +89089,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_CalendarTools",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_CalendarTools"
       }
     },
     {
@@ -89139,9 +89109,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_M365Copilot",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_M365Copilot"
       }
     },
     {
@@ -89160,9 +89129,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_MailTools",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_MailTools"
       }
     },
     {
@@ -89181,9 +89149,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_TeamsServer",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_TeamsServer"
       }
     },
     {
@@ -89202,9 +89169,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_MeServer",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_MeServer"
       }
     },
     {
@@ -89223,9 +89189,8 @@
       "repository": "https://github.com/bap-microsoft/MCP-Platform/",
       "homepage": "https://github.com/bap-microsoft/MCP-Platform/",
       "mount": {
-        "source": "remote",
-        "url": "https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_WordServer",
-        "transport": "streamable-http"
+        "source": "manual",
+        "note": "Configure the remote MCP endpoint manually: https://agent365.svc.cloud.microsoft/agents/tenants/{tenant_id}/servers/mcp_WordServer"
       }
     },
     {

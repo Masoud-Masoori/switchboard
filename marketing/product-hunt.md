@@ -26,7 +26,7 @@ How it connects: local clients (Claude Desktop, Claude Code, Cursor, your own ag
 
 Two things make day one easy: browse 4,700+ toolkits in the embedded dashboard, flip one on, and `switchboard install <client>` wires Claude Desktop / Claude Code / Cursor / VS Code / Codex in one command. There's also a tier hosted routers don't sell on your own hardware: per-client profiles, rate-limits, spend budgets, a circuit breaker, webhooks, poll-first triggers, request/response modifiers, HTTP-to-MCP tool servers, and OpenAPI→MCP import.
 
-**The honest part — this is a working alpha.** Every phase is shipped and verified, but it just launched: zero stars, no production users yet, and I'm not going to pretend otherwise. Under the hood it's pure-TypeScript/Node ESM with exactly 5 runtime dependencies, zero native dependencies, and every feature is backed by deterministic verification oracles (~1,150 automated checks — code checking code, no model tokens).
+**The honest part — this is a working alpha.** Every phase is shipped and verified, but it just launched: zero stars, no production users yet, and I'm not going to pretend otherwise. Under the hood it's pure-TypeScript/Node ESM with exactly 5 runtime dependencies, zero native dependencies, and every feature is backed by deterministic verification oracles (1,171 automated checks — code checking code, no model tokens).
 
 Positioning, plainly: hosted tool routers like Composio and Pipedream are genuinely good hosted SaaS — but they custody your tokens and meter your calls. MCP Switchboard is the self-hosted, governed alternative that keeps keys, governance and audit on *your* machine, free and open-source.
 

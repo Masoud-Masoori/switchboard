@@ -16,7 +16,7 @@
 | Field | Value |
 |---|---|
 | Aspect | 9:16 vertical (1080×1920) — primary; a 16:9 cut is optional for YouTube/LinkedIn |
-| Length | ~50 seconds (8 scenes) |
+| Length | ~39 seconds rendered; storyboard target remains ~50 seconds if recut manually |
 | Platforms | X, LinkedIn, YouTube Shorts, TikTok, Instagram Reels, Threads, Bluesky |
 | Tone | Calm, technical, confident. Dev-to-dev. No hype-bro energy. |
 | Goal | One idea sticks: *one local, governed endpoint that gives **both** Claude and ChatGPT the same tools — keys never leave your machine.* CTA = star the repo / try it. |
@@ -146,22 +146,17 @@ Hashtags (reuse): `#mcp #modelcontextprotocol #ai #opensource #selfhosted #claud
 
 ---
 
-## 8. How to actually render + post this (gated steps)
+## 8. Rendered ContentOps asset + posting gate
 
-**Why not auto-rendered through ContentOps:** ContentOps' pipeline only auto-writes *clickbait scripts from scraped news items* and has no entry point to inject a bespoke, accurate product script — so it can't faithfully render this. This package is the accurate source of truth for whatever renderer you use.
+ContentOps render completed and was staged for operator approval. Nothing has been posted.
 
-Options to produce `final.mp4`:
-1. **Manual/CapCut/Canva:** drop the 8 scenes + SRT + VO; fastest path to an honest cut.
-2. **Motion tool (Figma/Canva MCP):** generate the 8 frames from the storyboard, animate the hub-collapse in Scene 3.
-3. **AI render:** feed §3 storyboard + §4 VO to your video skill of choice.
+| Asset | Path |
+|---|---|
+| Final vertical video | `D:\Ideas\contentops-core\outputs\diagrams\mcp_switchboard_launch\final.mp4` |
+| Social upload copy | `D:\Ideas\contentops-core\outputs\diagrams\mcp_switchboard_launch\final_9x16_hq.mp4` |
+| Approval queue | `D:\Ideas\contentops-core\data\motion_diagram_approval_queue\mcp_switchboard_launch_1782771478` |
+| Queue manifest | `D:\Ideas\contentops-core\data\motion_diagram_approval_queue\mcp_switchboard_launch_1782771478\manifest.json` |
 
-**Then post (OUTWARD — needs your go + your logged-in Chrome):**
-```
-# after final.mp4 exists, queue the browser post for operator approval:
-contentops_queue_browser_post(
-  script_id=<id>,
-  platforms=["x","linkedin","youtube_shorts","threads","bluesky","tiktok","instagram"],
-  video_path="D:/Ideas/MCP Switchboard/marketing/video/final.mp4"
-)
-```
-Posting uploads under your identity to your accounts — I will not auto-blast; it's queued for your approval.
+QA status: `human_review`, score `75/100`. The deterministic gate passed file validity, duration, 9:16 aspect ratio, audio, captions assumption, and topic relevance. It flagged `visual_quality` because the dark brand palette has low luma variance; sampled frames are readable, but this still requires human review before posting.
+
+**Post only after explicit approval:** posting uploads under MAS-AI identity to external accounts. Approve the queued ContentOps manifest first, then publish to X, LinkedIn, YouTube Shorts, TikTok, Instagram Reels, Threads, and Bluesky.

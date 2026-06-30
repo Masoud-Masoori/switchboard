@@ -4,13 +4,13 @@
 
 ## 0. Build Status — ALL PHASES SHIPPED & VERIFIED
 
-The DO-set below is **fully built**, and several items the original plan marked "defer" (Triggers, Webhooks) were also delivered, plus net-new resilience/governance features (Profiles, Rate-limits + spend-budgets, per-server circuit breaker, retry/backoff) that go *beyond* Composio. Each feature is pinned by a zero-dep deterministic oracle; `npm run verify` runs the build + **all 25 oracles** and is **green (1153 checks)**.
+The DO-set below is **fully built**, and several items the original plan marked "defer" (Triggers, Webhooks) were also delivered, plus net-new resilience/governance features (Profiles, Rate-limits + spend-budgets, per-server circuit breaker, retry/backoff) that go *beyond* Composio. Each feature is pinned by a zero-dep deterministic oracle; `npm run verify` runs the build, low-severity npm audit, and **all 26 oracles** and is **green (1171 checks)**.
 
 | Phase / feature | Status | Oracle | Source |
 |---|---|---|---|
 | **0 — `/mcp` endpoint auth** (named API keys, fail-closed) | ✅ | `verify:auth` 13/13 | `apikeys.ts`, `dashboard.ts` |
 | **1 — Dashboard SPA + catalog grid + settings** | ✅ | `verify:dashboard` 73/73 | `dashboard.ts`, `catalog.ts` |
-| **2 — Catalog (multi-category, mounted-first ordering)** | ✅ | `verify:catalog` 20/20 | `catalog.ts` |
+| **2 — Catalog (multi-category, mounted-first ordering)** | ✅ | `verify:catalog` 21/21 | `catalog.ts` |
 | **3 — Logs + opt-in tool I/O capture / redaction** | ✅ | `verify:audit` 61/61 | `audit.ts`, `transforms.ts`, `router.ts` |
 | **4 — `switchboard expose` (safe public tunnel)** | ✅ | `verify:expose` 83/83 | `expose.ts`, `cli.ts` |
 | **5a — Council relay tools** (`council_consult`/`council_debate`) | ✅ | `verify:council` 34/34 | `council.ts` |

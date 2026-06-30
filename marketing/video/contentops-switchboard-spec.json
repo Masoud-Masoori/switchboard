@@ -1,0 +1,137 @@
+{
+  "title": "MCP SWITCHBOARD",
+  "kicker": "OPEN SOURCE",
+  "layout": "TB",
+  "nodes": [
+    {
+      "id": "clients",
+      "label": "AI CLIENTS",
+      "sublabel": "Claude, ChatGPT, Cursor",
+      "shape": "circle",
+      "role": "input"
+    },
+    {
+      "id": "switchboard",
+      "label": "SWITCHBOARD",
+      "sublabel": "one local endpoint",
+      "shape": "box",
+      "role": "process"
+    },
+    {
+      "id": "vault",
+      "label": "LOCAL VAULT",
+      "sublabel": "keys stay home",
+      "shape": "cylinder",
+      "role": "data"
+    },
+    {
+      "id": "policy",
+      "label": "POLICY GATE",
+      "sublabel": "read write full",
+      "shape": "diamond",
+      "role": "decision"
+    },
+    {
+      "id": "servers",
+      "label": "MCP SERVERS",
+      "sublabel": "4,776 toolkits",
+      "shape": "box",
+      "role": "process"
+    },
+    {
+      "id": "audit",
+      "label": "AUDIT LOG",
+      "sublabel": "every decision",
+      "shape": "cylinder",
+      "role": "data"
+    },
+    {
+      "id": "output",
+      "label": "SAME TOOLS",
+      "sublabel": "governed everywhere",
+      "shape": "circle",
+      "role": "output"
+    }
+  ],
+  "edges": [
+    {
+      "from": "clients",
+      "to": "switchboard",
+      "label": "connect",
+      "style": "solid"
+    },
+    {
+      "from": "switchboard",
+      "to": "vault",
+      "label": "secrets",
+      "style": "solid"
+    },
+    {
+      "from": "switchboard",
+      "to": "policy",
+      "label": "calls",
+      "style": "solid"
+    },
+    {
+      "from": "policy",
+      "to": "servers",
+      "label": "allowed",
+      "style": "solid"
+    },
+    {
+      "from": "policy",
+      "to": "audit",
+      "label": "logged",
+      "style": "dashed"
+    },
+    {
+      "from": "servers",
+      "to": "output",
+      "label": "tools",
+      "style": "solid"
+    }
+  ],
+  "hook": "Claude and ChatGPT can share tools without giving vendors your keys.",
+  "narration_beats": [
+    {
+      "text": "Every AI client rewires every app. That is the N by M tax.",
+      "highlight_nodes": ["clients"],
+      "highlight_edges": []
+    },
+    {
+      "text": "Switchboard collapses it to one local endpoint.",
+      "highlight_nodes": ["switchboard"],
+      "highlight_edges": [["clients", "switchboard"]]
+    },
+    {
+      "text": "Your credentials stay sealed in a local vault.",
+      "highlight_nodes": ["vault"],
+      "highlight_edges": [["switchboard", "vault"]]
+    },
+    {
+      "text": "Each call passes policy first: read, write, full, or approval.",
+      "highlight_nodes": ["policy"],
+      "highlight_edges": [["switchboard", "policy"]]
+    },
+    {
+      "text": "Allowed calls reach MCP servers and HTTP APIs.",
+      "highlight_nodes": ["servers"],
+      "highlight_edges": [["policy", "servers"]]
+    },
+    {
+      "text": "Every decision lands in one audit log.",
+      "highlight_nodes": ["audit"],
+      "highlight_edges": [["policy", "audit"]]
+    },
+    {
+      "text": "One setup gives every assistant the same governed tools.",
+      "highlight_nodes": ["output"],
+      "highlight_edges": [["servers", "output"]]
+    }
+  ],
+  "recap": {
+    "title": "One governed endpoint",
+    "bullets": ["Keys stay local", "Policy fails closed", "Every call logged"]
+  },
+  "cta": "Star MCP Switchboard if this should exist."
+}

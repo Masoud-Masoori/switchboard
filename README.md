@@ -12,7 +12,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-2dd4bf.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/Model_Context_Protocol-1.29-2dd4bf.svg)](https://modelcontextprotocol.io)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518.18-2dd4bf.svg)](https://nodejs.org)
-[![Verified](https://img.shields.io/badge/deterministic_oracles-1153_checks-2dd4bf.svg)](#everything-is-verified-by-a-deterministic-oracle)
+[![Verified](https://img.shields.io/badge/deterministic_oracles-1171_checks-2dd4bf.svg)](#everything-is-verified-by-a-deterministic-oracle)
 [![Status](https://img.shields.io/badge/status-working_alpha-D4A843.svg)](#project-status)
 [![Zero native deps](https://img.shields.io/badge/native_deps-0-D4A843.svg)](#security)
 
@@ -123,6 +123,23 @@ Prefer not to install anything globally? Run it on demand with npx:
 
 ```bash
 npx mcp-switchboard serve
+```
+
+Uninstall is plain npm:
+
+```bash
+npm uninstall -g mcp-switchboard
+
+# Optional: delete local Switchboard state too.
+# This removes your local vault, API keys, auth-server state, and audit/config files.
+rm -rf ~/.switchboard
+```
+
+Windows PowerShell equivalent:
+
+```powershell
+npm uninstall -g mcp-switchboard
+Remove-Item -Recurse -Force "$env:USERPROFILE\.switchboard"
 ```
 
 Open the dashboard at **http://127.0.0.1:8088**, then point an agent at the MCP endpoint. Wire a
@@ -385,7 +402,7 @@ The design keeps the same governance/honesty contract as everything else:
 
 The whole contract — poll is audited, fire is not, fire bypasses the `events` filter, read ceiling
 denies a non-read trigger, baseline survives restart — is verified by a deterministic oracle:
-`npm run verify:triggers` — 60/60. (`npm run verify` runs the build + **all 25 oracles, 1153 checks**.)
+`npm run verify:triggers` — 60/60. (`npm run verify` runs the build, low-severity npm audit, and **all 26 oracles, 1171 checks**.)
 
 ### Profiles — one switch between a locked-down view and the full surface
 
@@ -626,7 +643,8 @@ through the governed path.
 - **Per-server circuit breaker** — `settings.resilience` trips a flapping upstream after N transport
   failures and auto-probes after a cooldown; off by default. Verified by `npm run verify:breaker` — 47/47.
 - **Browsable toolkit catalog** — `toolkits sync`/`stats` builds a local grid of thousands of MCP +
-  HTTP toolkits from the MCP Registry + APIs.guru (CC0). Verified by `npm run verify:catalog` — 20/20.
+  HTTP toolkits from the MCP Registry + APIs.guru (CC0), with shipped mount URLs checked for
+  parseable, concrete `http(s)` targets. Verified by `npm run verify:catalog` — 21/21.
 - **BM25F semantic search mode** — `find_tools(query)` ranks across thousands of mounted tools so the
   agent's context never blows up. Verified by `npm run verify:search` — 21/21.
 
@@ -639,10 +657,10 @@ MCP Switchboard makes a lot of governance and honesty claims — "fails closed",
 "metadata only", "a profile can only narrow". None of them are taken on faith. Every one is pinned by a
 **deterministic oracle**: a zero-dependency Node script that imports the *compiled* code, exercises the
 contract, and prints `N/N checks passed` — no model tokens, no flakiness, just code checking code. One
-command runs the build plus all twenty-five:
+command runs the build, a low-severity npm audit, and all twenty-six oracles:
 
 ```bash
-npm run verify     # build + 25 oracles = 1153 checks, all green
+npm run verify     # build + npm audit + 26 oracles = 1171 checks, all green
 ```
 
 | Area | Oracle | Checks |
@@ -655,7 +673,8 @@ npm run verify     # build + 25 oracles = 1153 checks, all green
 | OpenAPI→MCP (`app2mcp`) | `verify:openapi` | 66 |
 | Auth schemes (bearer/api_key/basic/header) | `verify:auth` | 13 |
 | Cross-provider council | `verify:council` | 34 |
-| Toolkit catalog ingest | `verify:catalog` | 20 |
+| Toolkit catalog ingest | `verify:catalog` | 21 |
+| MCP Registry metadata | `verify:registry` | 17 |
 | BM25F `find_tools` search | `verify:search` | 21 |
 | Resources + prompts pass-through | `verify:resources-prompts` | 34 |
 | One-command `install` | `verify:install` | 57 |
@@ -672,7 +691,7 @@ npm run verify     # build + 25 oracles = 1153 checks, all green
 | `switchboard doctor` preflight | `verify:doctor` | 51 |
 | `switchboard expose` tunnel | `verify:expose` | 83 |
 | Example config strict-loads | `verify:config` | 21 |
-| **Total** | **`npm run verify`** | **1153** |
+| **Total** | **`npm run verify`** | **1171** |
 
 ## Docs
 

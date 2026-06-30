@@ -147,7 +147,7 @@ switchboard vault list      # names only, never values
 
 That said, here is what is real and verified *today*: the aggregating gateway (stdio + Streamable HTTP), the policy engine, all three tool-exposure modes, the encrypted vault, the approval gate, the audit log, the dashboard, the CLI, and one-command `install` into five clients. The full `find_tools → call_tool` round-trip works end-to-end through the governed path. Shipped phases also include managed OAuth for five providers, `app2mcp` (OpenAPI→MCP), the cross-provider council, claude.ai-web / ChatGPT OAuth 2.1 + PKCE, decision webhooks, and poll-first triggers — plus the "beyond hosted parity" tier (profiles, rate limits + spend budgets, circuit breaker, browsable catalog, and BM25F search mode).
 
-**On engineering discipline:** MCP Switchboard is pure-TypeScript/Node ESM with exactly **5 runtime dependencies**, **zero native dependencies**, and a one-command install. Every governance and honesty claim is backed by a **deterministic verification oracle** — a zero-dependency Node script that imports the compiled code, exercises the contract, and prints `N/N checks passed`. `npm run verify` runs the build plus all twenty-five oracles, **~1,150 automated checks** in total. That's code checking code, no model tokens, no flakiness — which is exactly the bar an alpha should hold itself to before asking you to trust it with your keys.
+**On engineering discipline:** MCP Switchboard is pure-TypeScript/Node ESM with exactly **5 runtime dependencies**, **zero native dependencies**, and a one-command install. Every governance and honesty claim is backed by a **deterministic verification oracle** — a zero-dependency Node script that imports the compiled code, exercises the contract, and prints `N/N checks passed`. `npm run verify` runs the build, npm audit, and all twenty-six oracles: **1,171 automated checks** in total. That's code checking code, no model tokens, no flakiness — which is exactly the bar an alpha should hold itself to before asking you to trust it with your keys.
 
 Criticism is wanted. If something is wrong, missing, or overstated, please open an issue or a PR.
 
@@ -172,7 +172,7 @@ Node.js 18.18 or newer. That's it. Install with `npm install -g mcp-switchboard`
 Composio and Pipedream are good hosted SaaS, but they custody your tokens and meter your calls. MCP Switchboard is the self-hosted, governed alternative: keys, governance, and audit stay on your machine; it mounts the existing MCP ecosystem rather than re-implementing integrations; it serves both Claude and ChatGPT through one governed endpoint; and it is free and Apache-2.0 with no per-call meter. It also adds profiles, spend budgets, and a per-server circuit breaker that run on your own hardware.
 
 **Is MCP Switchboard production-ready?**
-No — it is a working alpha. It just launched with no known production users. Every feature is pinned by a deterministic verification oracle (~1,150 automated checks), but you should still treat it as early software.
+No — it is a working alpha. It just launched with no known production users. Every feature is pinned by a deterministic verification oracle (1,171 automated checks), but you should still treat it as early software.
 
 ---
 

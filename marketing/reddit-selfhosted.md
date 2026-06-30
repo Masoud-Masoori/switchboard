@@ -21,7 +21,7 @@ The bits that matter for r/selfhosted specifically:
 
 **Cloud clients, if you want them.** Local clients hit `127.0.0.1` directly with an API key. If you also want claude.ai web or a ChatGPT custom connector to reach it, `switchboard expose` opens an HTTPS tunnel and there's a built-in OAuth 2.1 + PKCE authorization server — still zero token custody, and enabling it forces auth on (fail-closed). Entirely opt-in; the default posture is localhost-only.
 
-**Engineering / why it might survive on your box.** Pure TypeScript/Node ESM, exactly **5 runtime dependencies, zero native dependencies**, one-command install. Every feature claim ("fails closed", "never auto-downloads", "metadata only", "a profile can only narrow") is pinned by a deterministic verification oracle — zero-dependency Node scripts that import the compiled code and check the contract, ~1,150 automated checks total via `npm run verify`. No model tokens, just code checking code.
+**Engineering / why it might survive on your box.** Pure TypeScript/Node ESM, exactly **5 runtime dependencies, zero native dependencies**, one-command install. Every feature claim ("fails closed", "never auto-downloads", "metadata only", "a profile can only narrow") is pinned by a deterministic verification oracle — zero-dependency Node scripts that import the compiled code and check the contract, 1,171 automated checks total via `npm run verify`. No model tokens, just code checking code.
 
 **Prerequisite:** Node >= 18.18. That's the only thing you need installed.
 

@@ -5,6 +5,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "author": "MAS-AI Technologies",
+  "mcpName": "io.github.Mas-AI-Official/mcp-switchboard",
   "homepage": "https://github.com/Mas-AI-Official/mcp-switchboard#readme",
   "repository": {
     "type": "git",
@@ -45,6 +46,7 @@
     "dist",
     "public",
     "data",
+    "server.json",
     "switchboard.config.example.yaml",
     "README.md",
     "LICENSE"
@@ -57,6 +59,7 @@
     "dev": "tsc --watch",
     "start": "node dist/cli.js",
     "serve": "node dist/cli.js serve",
+    "security:audit": "npm audit --audit-level=low",
     "verify:oauth": "node scripts/verify-oauth.mjs",
     "verify:webhook": "node scripts/verify-webhook.mjs",
     "verify:triggers": "node scripts/verify-triggers.mjs",
@@ -66,6 +69,7 @@
     "verify:auth": "node scripts/verify-auth.mjs",
     "verify:council": "node scripts/verify-council.mjs",
     "verify:catalog": "node scripts/verify-catalog.mjs",
+    "verify:registry": "node scripts/verify-registry-metadata.mjs",
     "verify:search": "node scripts/verify-search.mjs",
     "verify:install": "node scripts/verify-install.mjs",
     "verify:local-llm": "node scripts/verify-local-llm.mjs",
@@ -82,8 +86,9 @@
     "verify:vault": "node scripts/verify-vault.mjs",
     "verify:router": "node scripts/verify-router.mjs",
     "verify:expose": "node scripts/verify-expose.mjs",
-    "verify": "npm run build && npm run verify:oauth && npm run verify:webhook && npm run verify:triggers && npm run verify:modifiers && npm run verify:httptool && npm run verify:auth && npm run verify:council && npm run verify:catalog && npm run verify:search && npm run verify:install && npm run verify:local-llm && npm run verify:dashboard && npm run verify:profiles && npm run verify:limits && npm run verify:breaker && npm run verify:config && npm run verify:audit && npm run verify:resources-prompts && npm run verify:health && npm run verify:retry && npm run verify:doctor && npm run verify:vault && npm run verify:router && npm run verify:openapi && npm run verify:expose",
-    "prepublishOnly": "npm run build"
+    "smoke:codex": "node scripts/smoke-codex-switchboard.mjs",
+    "verify": "npm run build && npm run security:audit && npm run verify:oauth && npm run verify:webhook && npm run verify:triggers && npm run verify:modifiers && npm run verify:httptool && npm run verify:auth && npm run verify:council && npm run verify:catalog && npm run verify:registry && npm run verify:search && npm run verify:install && npm run verify:local-llm && npm run verify:dashboard && npm run verify:profiles && npm run verify:limits && npm run verify:breaker && npm run verify:config && npm run verify:audit && npm run verify:resources-prompts && npm run verify:health && npm run verify:retry && npm run verify:doctor && npm run verify:vault && npm run verify:router && npm run verify:openapi && npm run verify:expose",
+    "prepublishOnly": "npm run verify"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
